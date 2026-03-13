@@ -1,15 +1,64 @@
 const https = require('https');
 
 const MAX_BODY_BYTES = 1024 * 1024;
-const ALLOWED_MODELS = new Set([
-    'claude-sonnet-4-5',
-    'claude-sonnet-4-6',
-    'claude-3-5-sonnet-latest',
-    'claude-3-7-sonnet-latest'
-]);
+
+function normalizeEnvValue(value) {
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    const trimmed = value.trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed.slice(1, -1);
+    }
+    return trimmed;
+}
 
 function sendJson(res, statusCode, payload) {
     res.status(statusCode).json(payload);
+}
+
+function parseJsonSafe(value) {
+    try {
+        return JSON.parse(value);
+    } catch {
+        return null;
+    }
+}
+
+function normalizeAnthropicError(statusCode, rawBody) {
+    const parsed = parseJsonSafe(rawBody);
+    const upstreamMessage = parsed?.error?.message || parsed?.message || `Anthropic API returned HTTP ${statusCode}.`;
+    const normalized = {
+        error: {
+            code: 'anthropic_api_error',
+            message: 'AI request failed.',
+            details: upstreamMessage
+        }
+    };
+
+    if (statusCode === 401 || /invalid x-api-key/i.test(upstreamMessage)) {
+        normalized.error.code = 'anthropic_auth_error';
+        normalized.error.message = 'Anthropic authentication failed.';
+        normalized.error.details = 'The server-side ANTHROPIC_API_KEY is invalid, missing, revoked, or belongs to a different account/project. Update the key in your environment and restart or redeploy the app.';
+        return normalized;
+    }
+
+    if (statusCode === 404 || /model/i.test(upstreamMessage)) {
+        normalized.error.code = 'anthropic_model_error';
+        normalized.error.message = 'Anthropic model configuration is invalid.';
+        normalized.error.details = 'Check ANTHROPIC_MODEL in your environment and make sure it is a valid model name available to your Anthropic account.';
+        return normalized;
+    }
+
+    if (statusCode === 429) {
+        normalized.error.code = 'anthropic_rate_limit';
+        normalized.error.message = 'Anthropic rate limit reached.';
+        normalized.error.details = 'Too many requests were sent to Anthropic. Wait a moment and try again.';
+        return normalized;
+    }
+
+    return normalized;
 }
 
 function readRequestBody(req) {
@@ -40,7 +89,7 @@ function callAnthropic(requestBody) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': process.env.ANTHROPIC_API_KEY,
+                'x-api-key': normalizeEnvValue(process.env.ANTHROPIC_API_KEY),
                 'anthropic-version': '2023-06-01',
                 'Content-Length': Buffer.byteLength(requestBody)
             }
@@ -72,8 +121,15 @@ module.exports = async function handler(req, res) {
         return;
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const anthropicApiKey = normalizeEnvValue(process.env.ANTHROPIC_API_KEY);
+    const anthropicModel = normalizeEnvValue(process.env.ANTHROPIC_MODEL);
+
+    if (!anthropicApiKey) {
         sendJson(res, 500, { error: { message: 'ANTHROPIC_API_KEY is not configured.' } });
+        return;
+    }
+    if (!anthropicModel) {
+        sendJson(res, 500, { error: { message: 'ANTHROPIC_MODEL is not configured.' } });
         return;
     }
 
@@ -100,7 +156,7 @@ module.exports = async function handler(req, res) {
     }
 
     const requestBody = JSON.stringify({
-        model: ALLOWED_MODELS.has(payload.model) ? payload.model : 'claude-sonnet-4-6',
+        model: anthropicModel,
         max_tokens: Math.min(Number(payload.max_tokens) || 1800, 1800),
         system: payload.system,
         messages: payload.messages
@@ -108,6 +164,10 @@ module.exports = async function handler(req, res) {
 
     try {
         const upstream = await callAnthropic(requestBody);
+        if (upstream.statusCode >= 400) {
+            sendJson(res, upstream.statusCode, normalizeAnthropicError(upstream.statusCode, upstream.body));
+            return;
+        }
         res.status(upstream.statusCode);
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.send(upstream.body);

@@ -36,21 +36,71 @@ function loadDotEnv() {
 
 loadDotEnv();
 
+function normalizeEnvValue(value) {
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    const trimmed = value.trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed.slice(1, -1);
+    }
+    return trimmed;
+}
+
 const PORT = process.env.PORT || 3000;
-const HOST = '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 const ROOT_DIR = __dirname;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_API_KEY = normalizeEnvValue(process.env.ANTHROPIC_API_KEY);
+const ANTHROPIC_MODEL = normalizeEnvValue(process.env.ANTHROPIC_MODEL);
 const MAX_BODY_BYTES = 1024 * 1024;
-const ALLOWED_MODELS = new Set([
-    'claude-sonnet-4-5',
-    'claude-sonnet-4-6',
-    'claude-3-5-sonnet-latest',
-    'claude-3-7-sonnet-latest'
-]);
 
 function sendJson(res, statusCode, payload) {
     res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
+}
+
+function parseJsonSafe(value) {
+    try {
+        return JSON.parse(value);
+    } catch {
+        return null;
+    }
+}
+
+function normalizeAnthropicError(statusCode, rawBody) {
+    const parsed = parseJsonSafe(rawBody);
+    const upstreamMessage = parsed?.error?.message || parsed?.message || `Anthropic API returned HTTP ${statusCode}.`;
+    const normalized = {
+        error: {
+            code: 'anthropic_api_error',
+            message: 'AI request failed.',
+            details: upstreamMessage
+        }
+    };
+
+    if (statusCode === 401 || /invalid x-api-key/i.test(upstreamMessage)) {
+        normalized.error.code = 'anthropic_auth_error';
+        normalized.error.message = 'Anthropic authentication failed.';
+        normalized.error.details = 'The server-side ANTHROPIC_API_KEY is invalid, missing, revoked, or belongs to a different account/project. Update the key in your environment and restart or redeploy the app.';
+        return normalized;
+    }
+
+    if (statusCode === 404 || /model/i.test(upstreamMessage)) {
+        normalized.error.code = 'anthropic_model_error';
+        normalized.error.message = 'Anthropic model configuration is invalid.';
+        normalized.error.details = 'Check ANTHROPIC_MODEL in your environment and make sure it is a valid model name available to your Anthropic account.';
+        return normalized;
+    }
+
+    if (statusCode === 429) {
+        normalized.error.code = 'anthropic_rate_limit';
+        normalized.error.message = 'Anthropic rate limit reached.';
+        normalized.error.details = 'Too many requests were sent to Anthropic. Wait a moment and try again.';
+        return normalized;
+    }
+
+    return normalized;
 }
 
 function sanitizePath(urlPath) {
@@ -67,6 +117,10 @@ function sanitizePath(urlPath) {
 function proxyAnthropicRequest(req, res) {
     if (!ANTHROPIC_API_KEY) {
         sendJson(res, 500, { error: { message: 'Server is missing ANTHROPIC_API_KEY.' } });
+        return;
+    }
+    if (!ANTHROPIC_MODEL) {
+        sendJson(res, 500, { error: { message: 'Server is missing ANTHROPIC_MODEL.' } });
         return;
     }
 
@@ -96,9 +150,8 @@ function proxyAnthropicRequest(req, res) {
             return;
         }
 
-        const model = ALLOWED_MODELS.has(payload.model) ? payload.model : 'claude-sonnet-4-6';
         const requestBody = JSON.stringify({
-            model,
+            model: ANTHROPIC_MODEL,
             max_tokens: Math.min(Number(payload.max_tokens) || 1800, 1800),
             system: payload.system,
             messages: payload.messages
@@ -118,7 +171,12 @@ function proxyAnthropicRequest(req, res) {
             let data = '';
             proxyRes.on('data', chunk => data += chunk);
             proxyRes.on('end', () => {
-                res.writeHead(proxyRes.statusCode || 502, {
+                const statusCode = proxyRes.statusCode || 502;
+                if (statusCode >= 400) {
+                    sendJson(res, statusCode, normalizeAnthropicError(statusCode, data));
+                    return;
+                }
+                res.writeHead(statusCode, {
                     'Content-Type': 'application/json; charset=utf-8'
                 });
                 res.end(data);
@@ -180,6 +238,7 @@ http.createServer((req, res) => {
         res.end(data);
     });
 }).listen(PORT, HOST, () => {
-    console.log(`Posturography Analyzer running at http://${HOST}:${PORT}`);
-    console.log('Set ANTHROPIC_API_KEY in your environment before using AI interpretation.');
+    console.log(`Posturography Analyzer listening on ${HOST}:${PORT}`);
+    console.log(`Local URL: http://localhost:${PORT}`);
+    console.log('Set ANTHROPIC_API_KEY and ANTHROPIC_MODEL in your environment before using AI interpretation.');
 });

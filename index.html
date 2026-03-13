@@ -149,7 +149,7 @@
 </div>
 
 <script type="module">
-    const _cfg = { m: 'claude-sonnet-4-6' };
+    const AI_REQUEST_DEFAULTS = { maxTokens: 1800 };
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
     let allParsedData = [];
@@ -1120,15 +1120,20 @@ Do not diagnose. Start with: "COP Analysis"`;
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ model: _cfg.m, max_tokens: 1800, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] })
+                body: JSON.stringify({ max_tokens: AI_REQUEST_DEFAULTS.maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] })
             });
         } catch (networkErr) {
-            throw new Error(`Network error: ${networkErr.message}. Make sure the local server is running or that your Vercel deployment is configured with ANTHROPIC_API_KEY.`);
+            throw new Error(`Network error: ${networkErr.message}. Make sure the app is opened through the running server, and verify that the backend is reachable.`);
         }
-        if (!response.ok) { const e = await response.json().catch(() => ({})); throw new Error(e?.error?.message || `HTTP ${response.status}`); }
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            const mainMessage = payload?.error?.message || `HTTP ${response.status}`;
+            const details = payload?.error?.details;
+            throw new Error(details ? `${mainMessage}\n\nReason: ${details}` : mainMessage);
+        }
         const result = await response.json();
         if (result.content?.[0]?.text) return result.content[0].text;
-        throw new Error('Unexpected response format.');
+        throw new Error('The AI service returned an unexpected response format.');
     }
 
 </script>

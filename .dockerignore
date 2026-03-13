@@ -1,0 +1,7 @@
+.git
+.gitignore
+.vercel
+.env
+.env.local
+README.md
+api
