@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Posturography Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
+        #file-upload-area { border: 2px dashed #cbd5e1; transition: all 0.3s ease; }
+        #file-upload-area.dragover { border-color: #3b82f6; background-color: #eff6ff; }
+        .heatmap-cell { min-width: 90px; text-align: center; padding: 5px 6px; font-size: 11px; font-weight: 600; border: 1px solid #e5e7eb; }
+        #interpretation-output { white-space: pre-wrap; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+<div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+    <header class="mb-8">
+        <h1 class="text-4xl font-bold text-blue-700">Posturography Analysis Dashboard</h1>
+        <p class="text-lg text-gray-600 mt-2">Upload, analyze, and interpret posturography data sets.</p>
+    </header>
+
+    <div class="flex flex-col lg:flex-row gap-8">
+
+        <!-- Left Column -->
+        <div class="lg:w-1/3 space-y-6">
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-700">1. Upload Data Files</h2>
+                <div id="file-upload-area" class="p-8 text-center rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="file" id="file-input" multiple accept=".pdf" class="hidden">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2H4a2 2 0 01-2-2z" />
+                    </svg>
+                    <p class="mt-2 text-sm text-gray-600"><span class="font-medium text-blue-600">Click to upload</span> or drag and drop</p>
+                    <p class="text-xs text-gray-500">CAPS EQ PDF reports (one or more)</p>
+                </div>
+                <div id="file-list" class="mt-4 space-y-2"></div>
+                <button id="reset-button" class="hidden mt-4 w-full bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition duration-300">Reset and Clear All</button>
+            </div>
+
+            <div id="controls-section" class="bg-white p-6 rounded-lg shadow-md hidden">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-700">2. Select Analysis</h2>
+
+                <div class="mb-4">
+                    <label for="analysis-mode-select" class="block text-sm font-medium text-gray-700 mb-1">Analysis Mode</label>
+                    <select id="analysis-mode-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white">
+                        <option value="metric">Metric Comparison (Bar Chart)</option>
+                        <option value="radar">Comprehensive View (Radar)</option>
+                        <option value="birdsEye">Birds Eye View (Heatmap)</option>
+                        <option value="cop">COP Scatter Plot</option>
+                    </select>
+                </div>
+
+                <div id="metric-controls">
+                    <label for="metric-select" class="block text-sm font-medium text-gray-700 mb-1">Select Metric</label>
+                    <select id="metric-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white"></select>
+                </div>
+
+                <div id="radar-controls" class="hidden space-y-4">
+                    <div>
+                        <label for="test-select" class="block text-sm font-medium text-gray-700 mb-1">Select Test Condition</label>
+                        <select id="test-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Radar Metrics</label>
+                        <div id="radar-metric-selector" class="grid grid-cols-2 gap-x-4 gap-y-2 max-h-48 overflow-y-auto p-3 border rounded-lg bg-gray-50"></div>
+                    </div>
+                </div>
+
+                <div id="cop-controls" class="hidden">
+                    <label for="cop-test-select" class="block text-sm font-medium text-gray-700 mb-1">Test Condition</label>
+                    <select id="cop-test-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white"></select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="lg:w-2/3 space-y-6">
+
+            <div id="placeholder" class="bg-white p-6 rounded-lg shadow-md text-center">
+                <svg class="mx-auto h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m-9 4H5l-2 2h2m10 0h2l2 2h-2m-4-4l-1.414-1.414A2 2 0 0011.172 10H10a2 2 0 00-2 2v4a2 2 0 002 2h1.172a2 2 0 001.414-.586L14 14m-4-4V7a2 2 0 012-2h2a2 2 0 012 2v3"></path></svg>
+                <h3 class="mt-2 text-xl font-medium text-gray-700">Waiting for data...</h3>
+                <p class="mt-1 text-sm text-gray-500">Upload one or more CAPS EQ PDF reports to begin.</p>
+            </div>
+
+            <div id="loading" class="hidden bg-white p-6 rounded-lg shadow-md text-center">
+                <svg class="mx-auto h-12 w-12 text-blue-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <h3 class="mt-2 text-xl font-medium text-gray-700">Parsing PDFs...</h3>
+                <p class="mt-1 text-sm text-gray-500">Extracting posturography data. Please wait.</p>
+            </div>
+
+            <div id="results-section" class="hidden space-y-6">
+
+                <!-- Visualization -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-700">3. Visualization</h2>
+                        <div class="flex gap-2">
+                            <button id="export-png-btn" class="hidden text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg border transition">⬇ PNG</button>
+                            <button id="export-csv-btn" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg border transition">⬇ CSV</button>
+                        </div>
+                    </div>
+                    <div id="chart-container" class="relative h-96"><canvas id="results-chart"></canvas></div>
+                    <div id="birdsEye-container" class="hidden overflow-x-auto"></div>
+                    <p id="radar-disclaimer" class="hidden mt-4 text-xs text-gray-500 italic text-center">Values normalized 0–100. "100" = best performance. Tooltips show original values.</p>
+                </div>
+
+                <!-- Data Summary Table -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Data Summary</h2>
+                    <div id="summary-table-container" class="overflow-x-auto max-h-96 overflow-y-auto"></div>
+                </div>
+
+                <!-- AI Interpretation -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                        <h2 class="text-2xl font-semibold text-gray-700">Clinical Interpretation</h2>
+                        <div class="flex flex-wrap gap-2 justify-end">
+                            <button id="full-report-btn" class="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition flex items-center gap-2 text-sm">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                <span id="full-report-btn-text">Full Report</span>
+                                <svg id="full-report-loading" class="hidden animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            </button>
+                            <button id="interpretation-button" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm">
+                                <svg id="interpret-icon" class="h-4 w-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707" /></svg>
+                                <svg id="interpret-loading" class="hidden animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <span id="interpret-button-text">Interpret View</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="interpretation-output" class="p-4 bg-gray-50 rounded-lg min-h-[100px] text-gray-600">Click a button to generate an AI-powered clinical interpretation.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    const _cfg = { k: "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", m: "claude-sonnet-4-6" };
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    let allParsedData = [];
+    let allMetrics = new Set();
+    let allTestConditions = new Set();
+    let resultsChart = null;
+    let currentView = 'metric';
+
+    const RADAR_KEY_METRICS = {
+        'Stability Score': 'high',
+        'Sway Path Length': 'low',
+        'Sway Velocity (Ave)': 'low',
+        'Area 95% Conf. Ellipse': 'low',
+        'Fatigue Ratio': 'low',
+        'Adaptation Ratio': 'high',
+        'Directionality': 'low'
+    };
+
+    const CHART_COLORS = [
+        { bg: 'rgba(59,130,246,0.4)', border: 'rgba(59,130,246,1)', solid: '#3b82f6' },
+        { bg: 'rgba(239,68,68,0.4)',  border: 'rgba(239,68,68,1)',  solid: '#ef4444' },
+        { bg: 'rgba(22,163,74,0.4)',  border: 'rgba(22,163,74,1)',  solid: '#16a34a' },
+        { bg: 'rgba(245,158,11,0.4)', border: 'rgba(245,158,11,1)', solid: '#f59e0b' },
+        { bg: 'rgba(107,114,128,0.4)',border: 'rgba(107,114,128,1)',solid: '#6b7280' },
+        { bg: 'rgba(139,92,246,0.4)', border: 'rgba(139,92,246,1)', solid: '#8b5cf6' },
+    ];
+
+    function getLabel(d) { return (d.label && d.label.trim()) ? d.label : d.fileName.replace(/\.pdf$/i, ''); }
+
+    // DOM
+    const fileInput = document.getElementById('file-input');
+    const fileUploadArea = document.getElementById('file-upload-area');
+    const fileList = document.getElementById('file-list');
+    const resetButton = document.getElementById('reset-button');
+    const controlsSection = document.getElementById('controls-section');
+    const analysisModeSelect = document.getElementById('analysis-mode-select');
+    const metricControls = document.getElementById('metric-controls');
+    const metricSelect = document.getElementById('metric-select');
+    const radarControls = document.getElementById('radar-controls');
+    const testSelect = document.getElementById('test-select');
+    const copControls = document.getElementById('cop-controls');
+    const copTestSelect = document.getElementById('cop-test-select');
+    const radarMetricSelector = document.getElementById('radar-metric-selector');
+    const placeholder = document.getElementById('placeholder');
+    const loading = document.getElementById('loading');
+    const resultsSection = document.getElementById('results-section');
+    const chartCanvas = document.getElementById('results-chart');
+    const chartContainer = document.getElementById('chart-container');
+    const birdsEyeContainer = document.getElementById('birdsEye-container');
+    const radarDisclaimer = document.getElementById('radar-disclaimer');
+    const summaryTableContainer = document.getElementById('summary-table-container');
+    const interpretationButton = document.getElementById('interpretation-button');
+    const interpretationOutput = document.getElementById('interpretation-output');
+    const fullReportBtn = document.getElementById('full-report-btn');
+    const exportPngBtn = document.getElementById('export-png-btn');
+    const exportCsvBtn = document.getElementById('export-csv-btn');
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[char]);
+    }
+
+    function formatInlineMarkdown(text) {
+        let escaped = escapeHtml(text);
+        escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        escaped = escaped.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        return escaped;
+    }
+
+    function renderInterpretationMarkdown(markdown) {
+        const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n');
+        const htmlParts = [];
+        let paragraphLines = [];
+        let listItems = [];
+
+        const flushParagraph = () => {
+            if (!paragraphLines.length) return;
+            const content = paragraphLines.join('<br>');
+            htmlParts.push(`<p class="mb-3 last:mb-0">${content}</p>`);
+            paragraphLines = [];
+        };
+
+        const flushList = () => {
+            if (!listItems.length) return;
+            htmlParts.push(`<ul class="list-disc pl-5 mb-3 space-y-1">${listItems.join('')}</ul>`);
+            listItems = [];
+        };
+
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) {
+                flushParagraph();
+                flushList();
+                continue;
+            }
+
+            const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+            if (headingMatch) {
+                flushParagraph();
+                flushList();
+                const level = Math.min(headingMatch[1].length + 2, 6);
+                const sizeClass = level <= 2 ? 'text-lg font-semibold' : 'text-base font-semibold';
+                htmlParts.push(`<h${level} class="${sizeClass} text-gray-800 mb-2">${formatInlineMarkdown(headingMatch[2])}</h${level}>`);
+                continue;
+            }
+
+            const bulletMatch = line.match(/^[-*]\s+(.*)$/);
+            if (bulletMatch) {
+                flushParagraph();
+                listItems.push(`<li>${formatInlineMarkdown(bulletMatch[1])}</li>`);
+                continue;
+            }
+
+            flushList();
+            paragraphLines.push(formatInlineMarkdown(line));
+        }
+
+        flushParagraph();
+        flushList();
+
+        return htmlParts.join('') || `<p>${escapeHtml(markdown || '')}</p>`;
+    }
+
+    function setInterpretationStatus(message) {
+        interpretationOutput.textContent = message;
+    }
+
+    function setInterpretationResult(message) {
+        interpretationOutput.innerHTML = renderInterpretationMarkdown(message);
+    }
+
+    // Upload events
+    fileUploadArea.addEventListener('click', () => fileInput.click());
+    fileUploadArea.addEventListener('dragover', e => { e.preventDefault(); fileUploadArea.classList.add('dragover'); });
+    fileUploadArea.addEventListener('dragleave', () => fileUploadArea.classList.remove('dragover'));
+    fileUploadArea.addEventListener('drop', e => {
+        e.preventDefault(); fileUploadArea.classList.remove('dragover');
+        fileInput.files = e.dataTransfer.files; handleFiles(fileInput.files);
+    });
+    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+    resetButton.addEventListener('click', () => {
+        allParsedData = []; allMetrics = new Set(); allTestConditions = new Set();
+        currentView = 'metric'; analysisModeSelect.value = 'metric';
+        fileInput.value = ''; fileList.innerHTML = '';
+        controlsSection.classList.add('hidden');
+        metricControls.classList.remove('hidden');
+        radarControls.classList.add('hidden');
+        copControls.classList.add('hidden');
+        resultsSection.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        loading.classList.add('hidden');
+        resetButton.classList.add('hidden');
+        setInterpretationStatus('Click a button to generate an AI-powered clinical interpretation.');
+        if (resultsChart) { resultsChart.destroy(); resultsChart = null; }
+        populateRadarMetricSelector();
+    });
+
+    analysisModeSelect.addEventListener('change', e => {
+        currentView = e.target.value;
+        metricControls.classList.toggle('hidden', currentView !== 'metric');
+        radarControls.classList.toggle('hidden', currentView !== 'radar');
+        copControls.classList.toggle('hidden', currentView !== 'cop');
+        radarDisclaimer.classList.toggle('hidden', currentView !== 'radar');
+        displayResults();
+    });
+
+    metricSelect.addEventListener('change', displayResults);
+    testSelect.addEventListener('change', displayResults);
+    copTestSelect.addEventListener('change', displayResults);
+
+    // ---- File handler ----
+    async function handleFiles(files) {
+        if (files.length === 0) return;
+        placeholder.classList.add('hidden');
+        loading.classList.remove('hidden');
+        resultsSection.classList.add('hidden');
+        allParsedData = []; allMetrics = new Set(); allTestConditions = new Set();
+        fileList.innerHTML = '';
+
+        const fileArray = Array.from(files);
+        const filePromises = fileArray.map(file => readFileAsPDF(file).then(buf => parsePDFData(buf, file.name)));
+
+        try {
+            const parsedResults = await Promise.all(filePromises);
+            parsedResults.forEach(parsed => {
+                if (parsed) {
+                    allParsedData.push(parsed);
+                    Object.keys(parsed.tests).forEach(testKey => {
+                        allTestConditions.add(testKey);
+                        Object.keys(parsed.tests[testKey].metrics).forEach(m => allMetrics.add(m));
+                    });
+                }
+            });
+
+            if (allParsedData.length > 0) {
+                allParsedData.sort((a, b) => a.date - b.date);
+                buildFileList();
+                populateMetricSelect();
+                populateTestSelect();
+                populateCOPTestSelect();
+                populateRadarMetricSelector();
+                displayResults();
+                resetButton.classList.remove('hidden');
+            } else {
+                placeholder.classList.remove('hidden');
+                fileList.innerHTML = '<p class="text-red-500 text-sm">No valid posturography data found in files.</p>';
+            }
+        } catch (error) {
+            console.error('Error reading files:', error);
+            fileList.innerHTML = `<p class="text-red-500 text-sm">Error: ${error.message}</p>`;
+            placeholder.classList.remove('hidden');
+        } finally {
+            loading.classList.add('hidden');
+        }
+    }
+
+    function buildFileList() {
+        fileList.innerHTML = '';
+        allParsedData.forEach((d, i) => {
+            d.label = d.fileName.replace(/\.pdf$/i, '');
+            const color = CHART_COLORS[i % CHART_COLORS.length].solid;
+            const div = document.createElement('div');
+            div.className = 'bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-1.5';
+            div.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-400 truncate max-w-[180px]">${d.fileName}</span>
+                    <span class="text-xs text-gray-400">${d.date instanceof Date && !isNaN(d.date) ? d.date.toLocaleDateString() : ''}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${color}"></div>
+                    <input type="text" value="${d.label}" data-index="${i}"
+                        class="session-label-input flex-1 text-sm font-medium text-gray-800 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                        placeholder="Session label">
+                </div>`;
+            fileList.appendChild(div);
+        });
+        fileList.querySelectorAll('.session-label-input').forEach(input => {
+            input.addEventListener('input', e => {
+                allParsedData[parseInt(e.target.dataset.index)].label = e.target.value;
+                displayResults();
+            });
+        });
+    }
+
+    function readFileAsPDF(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // ---- PDF Parsing ----
+    async function parsePDFData(arrayBuffer, fileName) {
+        const data = { fileName, date: new Date(), tests: {} };
+        let dateSet = false;
+        try {
+            const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+            for (let pageNum = 2; pageNum <= pdf.numPages - 1; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const text = await extractPageText(page);
+                console.log(`[PDF] ${fileName} p${pageNum}:\n${text.substring(0, 600)}\n---`);
+                const testData = parseTestFromText(text);
+                if (testData) {
+                    data.tests[testData.key] = { fullName: testData.fullName, metrics: testData.metrics };
+                    if (!dateSet) { data.date = testData.date; dateSet = true; }
+                }
+            }
+        } catch (e) {
+            console.error('PDF parse error:', e);
+            return null;
+        }
+        if (Object.keys(data.tests).length === 0) return null;
+        return data;
+    }
+
+    async function extractPageText(page) {
+        const textContent = await page.getTextContent();
+        const items = textContent.items.filter(item => item.str && item.str.trim().length > 0);
+        if (items.length === 0) return '';
+        const LINE_THRESHOLD = 5;
+        const sorted = [...items].sort((a, b) => {
+            const yDiff = b.transform[5] - a.transform[5];
+            if (Math.abs(yDiff) > LINE_THRESHOLD) return yDiff;
+            return a.transform[4] - b.transform[4];
+        });
+        let result = '', lastY = null;
+        for (const item of sorted) {
+            const y = item.transform[5], str = item.str.trim();
+            if (!str) continue;
+            if (lastY !== null && Math.abs(y - lastY) > LINE_THRESHOLD) result += '\n';
+            else if (result.length > 0 && !result.endsWith('\n') && !result.endsWith(' ')) result += ' ';
+            result += str;
+            lastY = y;
+        }
+        return result;
+    }
+
+    function parseTestFromText(text) {
+        let testKey, testName;
+        const variantMatch = text.match(/Foam[\s\S]{0,5}Eyes[\s\S]{0,5}Closed[\s\S]{0,5}(Rt|Lt|Flx|Ext)\b/i);
+        if (variantMatch) {
+            testKey = `PSEC ${variantMatch[1]}`; testName = `Foam Eyes Closed ${variantMatch[1]}`;
+        } else if (/Normal[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Open\b/i.test(text)) {
+            testKey = 'NSEO'; testName = 'Normal Stability Eyes Open';
+        } else if (/Normal[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Closed\b/i.test(text)) {
+            testKey = 'NSEC'; testName = 'Normal Stability Eyes Closed';
+        } else if (/Perturbed[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Open\b/i.test(text)) {
+            testKey = 'PSEO'; testName = 'Perturbed Stability Eyes Open';
+        } else if (/Perturbed[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Closed\b/i.test(text)) {
+            testKey = 'PSEC'; testName = 'Perturbed Stability Eyes Closed';
+        } else {
+            console.warn('[PDF] Could not identify test. Snippet:', text.substring(0, 300));
+            return null;
+        }
+
+        const dateMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+        const testDate = dateMatch ? new Date(dateMatch[1]) : new Date();
+        const metrics = {};
+        const pf = s => { const v = parseFloat(s); return isNaN(v) ? undefined : v; };
+
+        const ssM = text.match(/Stability Score\s+([\d.]+)\s*%/);
+        if (ssM) metrics['Stability Score'] = pf(ssM[1]);
+
+        const scM = text.match(/Stability Class\s+(Healthy Balance|Mildly Reduced|Moderately Reduced|Severely Reduced|Profoundly Reduced)/i);
+        if (scM) metrics['Stability Class'] = scM[1];
+
+        const splM = text.match(/Sway Path Length\s+([\d.]+)\s*m(?!\s*\/)/);
+        if (splM) metrics['Sway Path Length'] = pf(splM[1]);
+
+        const areaM = text.match(/Area 95%\s*Conf\.?\s*Ellipse\s+([\d.]+)/);
+        if (areaM) metrics['Area 95% Conf. Ellipse'] = pf(areaM[1]);
+
+        const velM = text.match(/Sway Velocity:\s*Max\s*&\s*Ave\s+([\d.]+)\s*m\/s\s*&\s*([\d.]+)\s*m\/s/);
+        if (velM) { metrics['Sway Velocity (Max)'] = pf(velM[1]); metrics['Sway Velocity (Ave)'] = pf(velM[2]); }
+
+        const accM = text.match(/Sway Acceler\.:\s*Max\s*&\s*Ave\s+([\d.]+)[^&]*&\s*([\d.]+)/);
+        if (accM) { metrics['Sway Acceler. (Max)'] = pf(accM[1]); metrics['Sway Acceler. (Ave)'] = pf(accM[2]); }
+
+        const asM = text.match(/Actual Sway:\s*Max\s*&\s*Ave\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
+        if (asM) { metrics['Actual Sway (Max)'] = pf(asM[1]); metrics['Actual Sway (Ave)'] = pf(asM[2]); }
+
+        const mlM = text.match(/ML Sway:\s*Max\s*&\s*95%\s*Conf\.\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
+        if (mlM) { metrics['ML Sway (Max)'] = pf(mlM[1]); metrics['ML Sway (95%)'] = pf(mlM[2]); }
+
+        const apM = text.match(/AP Sway:\s*Max\s*&\s*95%\s*Conf\.\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
+        if (apM) { metrics['AP Sway (Max)'] = pf(apM[1]); metrics['AP Sway (95%)'] = pf(apM[2]); }
+
+        const csM = text.match(/95%\s*Conf\.?\s*Sway:\s*Max\s*&\s*Min\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
+        if (csM) { metrics['95% Conf. Sway (Max)'] = pf(csM[1]); metrics['95% Conf. Sway (Min)'] = pf(csM[2]); }
+
+        const scXY = text.match(/Sway Center\s*\[Xo,?\s*Yo\]\s*\[?\s*(-?[\d.]+)\s*m,\s*(-?[\d.]+)\s*m\s*\]?/);
+        if (scXY) { metrics['Sway Center Xo'] = pf(scXY[1]); metrics['Sway Center Yo'] = pf(scXY[2]); }
+
+        const frM = text.match(/Fatigue Ratio\s+([\d.]+)\s*%/);
+        if (frM) metrics['Fatigue Ratio'] = pf(frM[1]);
+
+        const arM = text.match(/Adaptation Ratio\s+([\d.]+)\s*%/);
+        if (arM) metrics['Adaptation Ratio'] = pf(arM[1]);
+
+        const dirM = text.match(/Directionality\s+(\d+)\s*%/);
+        if (dirM) metrics['Directionality'] = pf(dirM[1]);
+
+        const pdM = text.match(/Pred\.?\s*Direction of Sway\s+(-?[\d.]+)\s*deg/);
+        if (pdM) metrics['Pred. Direction of Sway'] = pf(pdM[1]);
+
+        const ppM = text.match(/Parameter\s+p\s+([\d.]+)/);
+        if (ppM) metrics['Parameter p'] = pf(ppM[1]);
+
+        if (/Unable to Complete/i.test(text)) metrics['Test Status'] = 'Unable to Complete';
+        else if (/\bCompleted\b/i.test(text)) metrics['Test Status'] = 'Completed';
+
+        return { key: testKey, fullName: testName, date: testDate, metrics };
+    }
+
+    // ---- Populate selects ----
+    function populateMetricSelect() {
+        metricSelect.innerHTML = '<option value="">-- Select a Metric --</option>';
+        const sortedMetrics = Array.from(allMetrics).sort();
+        const keyMetrics = ['Stability Score', 'Sway Path Length', 'Sway Velocity (Ave)', 'Area 95% Conf. Ellipse'];
+        keyMetrics.forEach(km => {
+            if (sortedMetrics.includes(km))
+                metricSelect.innerHTML += `<option value="${km}" ${km === 'Stability Score' ? 'selected' : ''}>${km}</option>`;
+        });
+        sortedMetrics.forEach(m => { if (!keyMetrics.includes(m)) metricSelect.innerHTML += `<option value="${m}">${m}</option>`; });
+    }
+
+    function populateTestSelect() {
+        testSelect.innerHTML = '';
+        Array.from(allTestConditions).sort().forEach((t, i) => {
+            testSelect.innerHTML += `<option value="${t}" ${i === 0 ? 'selected' : ''}>${t}</option>`;
+        });
+    }
+
+    function populateCOPTestSelect() {
+        copTestSelect.innerHTML = '<option value="all">All Tests</option>';
+        Array.from(allTestConditions).sort().forEach(t => {
+            copTestSelect.innerHTML += `<option value="${t}">${t}</option>`;
+        });
+    }
+
+    function populateRadarMetricSelector() {
+        radarMetricSelector.innerHTML = '';
+        Object.keys(RADAR_KEY_METRICS).forEach(metric => {
+            if (!allMetrics.has(metric)) return;
+            const id = `rm-${metric.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-2';
+            div.innerHTML = `
+                <input id="${id}" type="checkbox" value="${metric}" class="radar-metric-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" checked>
+                <label for="${id}" class="text-sm font-medium text-gray-700 cursor-pointer">${metric}</label>`;
+            radarMetricSelector.appendChild(div);
+        });
+        radarMetricSelector.addEventListener('change', e => {
+            if (e.target.classList.contains('radar-metric-checkbox')) displayResults();
+        });
+    }
+
+    // ---- Display dispatcher ----
+    function displayResults() {
+        controlsSection.classList.remove('hidden');
+        resultsSection.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        loading.classList.add('hidden');
+
+        const isBirdsEye = currentView === 'birdsEye';
+        chartContainer.classList.toggle('hidden', isBirdsEye);
+        birdsEyeContainer.classList.toggle('hidden', !isBirdsEye);
+        exportPngBtn.classList.toggle('hidden', isBirdsEye);
+        radarDisclaimer.classList.toggle('hidden', currentView !== 'radar');
+
+        if (currentView === 'metric') {
+            const sel = metricSelect.value;
+            if (!sel) { destroyChart(); summaryTableContainer.innerHTML = '<p class="text-gray-500">Please select a metric.</p>'; return; }
+            const a = analyzeMetricData(sel);
+            updateChart(a); updateTable(a);
+        } else if (currentView === 'radar') {
+            const sel = testSelect.value;
+            if (!sel) { destroyChart(); summaryTableContainer.innerHTML = '<p class="text-gray-500">Please select a test condition.</p>'; return; }
+            const a = analyzeRadarData(sel);
+            updateChart(a); updateTable(a);
+        } else if (currentView === 'birdsEye') {
+            renderBirdsEye();
+        } else if (currentView === 'cop') {
+            renderCOPScatter();
+        }
+
+        interpretationOutput.textContent = 'Click a button to generate an AI-powered clinical interpretation.';
+        interpretationButton.disabled = false;
+        document.getElementById('interpret-button-text').textContent = 'Interpret View';
+        document.getElementById('interpret-icon').classList.remove('hidden');
+        document.getElementById('interpret-loading').classList.add('hidden');
+    }
+
+    function destroyChart() { if (resultsChart) { resultsChart.destroy(); resultsChart = null; } }
+
+    // ---- Metric bar chart analysis ----
+    function analyzeMetricData(metric) {
+        const numFiles = allParsedData.length;
+        const labels = allParsedData.map(d => getLabel(d).length > 25 ? '...' + getLabel(d).slice(-22) : getLabel(d));
+        const commonTests = new Set();
+        allParsedData.forEach(d => Object.keys(d.tests).forEach(k => {
+            if (d.tests[k].metrics[metric] !== undefined) commonTests.add(k);
+        }));
+        const sortedTests = Array.from(commonTests).sort();
+
+        const tableData = { header: ['Metric', 'Test', ...labels], rows: [] };
+        if (numFiles === 2) { tableData.header.push('Change', '% Change'); }
+        else if (numFiles > 2) { tableData.header.push('Mean', 'Std Dev'); }
+
+        const chartData = { labels: sortedTests, datasets: [] };
+
+        if (numFiles === 1) {
+            const data = [];
+            sortedTests.forEach(k => { const v = allParsedData[0].tests[k]?.metrics[metric]; data.push(v); tableData.rows.push([metric, k, v]); });
+            chartData.datasets.push({ label: labels[0], data, backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, borderWidth: 1 });
+        } else if (numFiles === 2) {
+            const [d1, d2] = [[], []];
+            sortedTests.forEach(k => {
+                const v1 = allParsedData[0].tests[k]?.metrics[metric];
+                const v2 = allParsedData[1].tests[k]?.metrics[metric];
+                d1.push(v1); d2.push(v2);
+                let ch = 'N/A', pct = 'N/A';
+                if (v1 !== undefined && v2 !== undefined) { ch = v2 - v1; pct = v1 !== 0 ? (ch / v1) * 100 : 'N/A'; }
+                tableData.rows.push([metric, k, v1, v2, ch, pct]);
+            });
+            chartData.datasets.push({ label: labels[0], data: d1, backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, borderWidth: 1 });
+            chartData.datasets.push({ label: labels[1], data: d2, backgroundColor: CHART_COLORS[1].bg, borderColor: CHART_COLORS[1].border, borderWidth: 1 });
+        } else {
+            allParsedData.forEach((fd, i) => {
+                const data = sortedTests.map(k => fd.tests[k]?.metrics[metric]);
+                chartData.datasets.push({ label: labels[i], data, backgroundColor: CHART_COLORS[i % CHART_COLORS.length].bg, borderColor: CHART_COLORS[i % CHART_COLORS.length].border, borderWidth: 1 });
+            });
+            sortedTests.forEach(k => {
+                const row = [metric, k];
+                const vals = allParsedData.map(fd => { const v = fd.tests[k]?.metrics[metric]; row.push(v !== undefined ? v : 'N/A'); return v; });
+                const valid = vals.filter(v => v !== undefined);
+                if (valid.length > 0) { const { mean, stdDev } = calcStats(valid); row.push(mean, stdDev); } else row.push('N/A', 'N/A');
+                tableData.rows.push(row);
+            });
+        }
+        return { type: 'bar', chartData, tableData, numFiles, metric };
+    }
+
+    // ---- Radar analysis ----
+    function analyzeRadarData(test) {
+        const numFiles = allParsedData.length;
+        const labels = allParsedData.map(d => getLabel(d).length > 25 ? '...' + getLabel(d).slice(-22) : getLabel(d));
+        const radarMetrics = Array.from(document.querySelectorAll('#radar-metric-selector input:checked')).map(cb => cb.value);
+
+        const tableData = { header: ['Metric', ...labels], rows: [] };
+        if (numFiles === 2) tableData.header.push('Change', '% Change');
+        else if (numFiles > 2) tableData.header.push('Mean', 'Std Dev');
+
+        const maxValues = {};
+        radarMetrics.forEach(m => {
+            let max = 0;
+            allParsedData.forEach(d => { const v = d.tests[test]?.metrics[m]; if (v !== undefined && Math.abs(v) > max) max = Math.abs(v); });
+            maxValues[m] = max === 0 ? 1 : max;
+        });
+
+        const chartData = {
+            labels: radarMetrics,
+            datasets: allParsedData.map((d, i) => {
+                const normalizedData = [], originalData = [];
+                radarMetrics.forEach(m => {
+                    const v = d.tests[test]?.metrics[m];
+                    originalData.push(v);
+                    if (v === undefined) { normalizedData.push(NaN); return; }
+                    let n = v / maxValues[m];
+                    if (RADAR_KEY_METRICS[m] === 'low') n = 1 - Math.abs(n);
+                    if (n < 0) n = 0;
+                    normalizedData.push(n * 100);
+                });
+                return { label: labels[i], data: normalizedData, originalData, backgroundColor: CHART_COLORS[i % CHART_COLORS.length].bg, borderColor: CHART_COLORS[i % CHART_COLORS.length].border, borderWidth: 2, pointBackgroundColor: CHART_COLORS[i % CHART_COLORS.length].border, pointBorderColor: '#fff', pointHoverBackgroundColor: '#fff', pointHoverBorderColor: CHART_COLORS[i % CHART_COLORS.length].border };
+            })
+        };
+
+        radarMetrics.forEach(m => {
+            const row = [m];
+            const vals = allParsedData.map(d => { const v = d.tests[test]?.metrics[m]; row.push(v); return v; });
+            if (numFiles === 2) {
+                const [v1, v2] = vals;
+                let ch = 'N/A', pct = 'N/A';
+                if (v1 !== undefined && v2 !== undefined) { ch = v2 - v1; pct = v1 !== 0 ? (ch / v1) * 100 : 'N/A'; }
+                row.push(ch, pct);
+            } else if (numFiles > 2) {
+                const valid = vals.filter(v => v !== undefined);
+                if (valid.length > 0) { const { mean, stdDev } = calcStats(valid); row.push(mean, stdDev); } else row.push('N/A', 'N/A');
+            }
+            tableData.rows.push(row);
+        });
+
+        return { type: 'radar', chartData, tableData, numFiles, test };
+    }
+
+    function calcStats(values) {
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const stdDev = Math.sqrt(values.map(x => (x - mean) ** 2).reduce((a, b) => a + b, 0) / values.length);
+        return { mean, stdDev };
+    }
+
+    // ---- Chart render ----
+    function updateChart(analysis) {
+        destroyChart();
+        const ctx = chartCanvas.getContext('2d');
+
+        if (analysis.type === 'bar') {
+            resultsChart = new Chart(ctx, {
+                type: 'bar',
+                data: analysis.chartData,
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: analysis.numFiles > 1 ? `${analysis.metric} Comparison` : analysis.metric, font: { size: 16 } },
+                        tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(3) : 'N/A'}` } }
+                    },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Value' } }, x: { title: { display: true, text: 'Test Condition' } } }
+                }
+            });
+        } else if (analysis.type === 'radar') {
+            if (!analysis.chartData.labels?.length) { summaryTableContainer.innerHTML = '<p class="text-gray-500">Select at least one metric.</p>'; return; }
+            resultsChart = new Chart(ctx, {
+                type: 'radar',
+                data: analysis.chartData,
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    elements: { line: { tension: 0.1 } },
+                    scales: { r: { beginAtZero: true, min: 0, max: 100, pointLabels: { font: { size: 11 } }, ticks: { display: false, stepSize: 25 }, angleLines: { color: 'rgba(0,0,0,0.1)' }, grid: { color: 'rgba(0,0,0,0.1)' } } },
+                    plugins: {
+                        title: { display: true, text: `Profile: ${analysis.test} (Normalized)`, font: { size: 16 } },
+                        tooltip: { callbacks: { label: ctx => { const orig = ctx.dataset.originalData[ctx.dataIndex]; return `${ctx.dataset.label}: ${orig !== undefined ? orig.toFixed(3) : 'N/A'} (Score: ${ctx.parsed.r.toFixed(1)})`; } } }
+                    }
+                }
+            });
+        }
+    }
+
+    // ---- Table render with color-coded change ----
+    function updateTable(analysis) {
+        if (analysis.type === 'radar' && !analysis.chartData.labels?.length) {
+            summaryTableContainer.innerHTML = '<p class="text-gray-500">Select at least one metric.</p>'; return;
+        }
+        let html = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
+        analysis.tableData.header.forEach(h => {
+            html += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">${h}</th>`;
+        });
+        html += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+
+        analysis.tableData.rows.forEach(row => {
+            const metricName = row[0];
+            const direction = RADAR_KEY_METRICS[metricName];
+            html += '<tr>';
+            row.forEach((cell, idx) => {
+                const hdr = analysis.tableData.header[idx];
+                let val, extra = '';
+                if (typeof cell === 'number') {
+                    if (hdr === '% Change') val = (cell > 0 ? '+' : '') + cell.toFixed(1) + '%';
+                    else if (hdr === 'Change') val = (cell > 0 ? '+' : '') + cell.toFixed(3);
+                    else val = cell.toFixed(3);
+                    if ((hdr === 'Change' || hdr === '% Change') && direction && Math.abs(cell) > 0.00001) {
+                        const good = direction === 'high' ? cell > 0 : cell < 0;
+                        extra = good ? ' text-green-600 font-semibold' : ' text-red-600 font-semibold';
+                    }
+                } else {
+                    val = (cell === undefined || cell === null) ? 'N/A' : cell;
+                }
+                let cls = `px-4 py-3 whitespace-nowrap text-sm${extra}`;
+                if (!extra) cls += (idx === 0 || idx === 1) ? ' text-gray-900 font-medium' : ' text-gray-600';
+                html += `<td class="${cls}">${val}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        summaryTableContainer.innerHTML = html;
+    }
+
+    // ---- #2 Birds Eye heatmap ----
+    function renderBirdsEye() {
+        destroyChart();
+        const tests = Array.from(allTestConditions).sort();
+        const metrics = Object.keys(RADAR_KEY_METRICS).filter(m => allMetrics.has(m));
+        if (!tests.length || !metrics.length) { birdsEyeContainer.innerHTML = '<p class="text-gray-500 p-4">No key metric data found.</p>'; return; }
+
+        // Global min/max per metric for normalization
+        const ranges = {};
+        metrics.forEach(m => {
+            let min = Infinity, max = -Infinity;
+            allParsedData.forEach(s => tests.forEach(t => { const v = s.tests[t]?.metrics[m]; if (v !== undefined) { min = Math.min(min, v); max = Math.max(max, v); } }));
+            ranges[m] = { min: isFinite(min) ? min : 0, max: isFinite(max) ? max : 1 };
+        });
+
+        function score(m, v) {
+            const { min, max } = ranges[m];
+            let n = max === min ? 0.5 : (v - min) / (max - min);
+            if (RADAR_KEY_METRICS[m] === 'low') n = 1 - n;
+            return Math.max(0, Math.min(1, n)) * 100;
+        }
+
+        function cellStyle(s) {
+            if (s >= 66) return `background:rgba(22,163,74,${0.15 + s/200});color:#14532d`;
+            if (s >= 33) return `background:rgba(234,179,8,${0.2 + (s-33)/160});color:#713f12`;
+            return `background:rgba(239,68,68,${0.15 + (33-s)/66});color:#7f1d1d`;
+        }
+
+        function fmtVal(m, v) {
+            if (['Stability Score','Fatigue Ratio','Adaptation Ratio','Directionality'].some(x => m.includes(x.split(' ')[0]) && m === x)) return v.toFixed(1) + '%';
+            return v.toFixed(3);
+        }
+
+        let html = '<div class="space-y-8">';
+        allParsedData.forEach((session, si) => {
+            const color = CHART_COLORS[si % CHART_COLORS.length].solid;
+            if (allParsedData.length > 1) {
+                html += `<div class="flex items-center gap-2 mb-2"><div class="w-3 h-3 rounded-full" style="background:${color}"></div><span class="font-semibold text-gray-700">${getLabel(session)}</span></div>`;
+            }
+            html += `<div class="overflow-x-auto"><table class="border-collapse text-xs">`;
+            html += `<thead><tr><th class="px-3 py-2 text-left bg-gray-100 border border-gray-200 font-medium text-gray-600 whitespace-nowrap">Test</th>`;
+            metrics.forEach(m => { html += `<th class="px-2 py-2 text-center bg-gray-100 border border-gray-200 font-medium text-gray-600" style="min-width:88px">${m}</th>`; });
+            html += `</tr></thead><tbody>`;
+            tests.forEach(test => {
+                html += `<tr><td class="px-3 py-2 font-medium text-gray-700 border border-gray-200 bg-gray-50 whitespace-nowrap">${test}</td>`;
+                metrics.forEach(m => {
+                    const v = session.tests[test]?.metrics[m];
+                    if (v === undefined) { html += `<td class="heatmap-cell text-gray-300">—</td>`; return; }
+                    const s = score(m, v);
+                    let arrow = '';
+                    if (si > 0) {
+                        const pv = allParsedData[si - 1].tests[test]?.metrics[m];
+                        if (pv !== undefined) {
+                            const better = RADAR_KEY_METRICS[m] === 'high' ? v > pv : v < pv;
+                            arrow = better ? ' <span style="color:#15803d">↑</span>' : ' <span style="color:#dc2626">↓</span>';
+                        }
+                    }
+                    html += `<td class="heatmap-cell" style="${cellStyle(s)}">${fmtVal(m, v)}${arrow}</td>`;
+                });
+                html += `</tr>`;
+            });
+            html += `</tbody></table></div>`;
+        });
+        html += `</div>`;
+        html += `<div class="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-3 border-t">
+            <span class="font-medium">Legend:</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 rounded" style="background:rgba(239,68,68,0.55)"></span>Poor</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 rounded" style="background:rgba(234,179,8,0.5)"></span>Moderate</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 rounded" style="background:rgba(22,163,74,0.55)"></span>Good</span>
+            ${allParsedData.length > 1 ? '<span class="ml-2">↑ improved &nbsp; ↓ worsened vs prior session</span>' : ''}
+        </div>`;
+        birdsEyeContainer.innerHTML = html;
+
+        // Summary table for birds eye
+        const numFiles = allParsedData.length;
+        const hdrs = ['Metric', 'Test', ...allParsedData.map(d => getLabel(d))];
+        if (numFiles === 2) hdrs.push('Change', '% Change');
+        let tbl = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
+        hdrs.forEach(h => tbl += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky top-0 bg-gray-50">${h}</th>`);
+        tbl += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        metrics.forEach(m => {
+            tests.forEach(test => {
+                const vals = allParsedData.map(s => s.tests[test]?.metrics[m]);
+                if (!vals.some(v => v !== undefined)) return;
+                tbl += '<tr>';
+                tbl += `<td class="px-4 py-3 text-xs font-medium text-gray-900">${m}</td>`;
+                tbl += `<td class="px-4 py-3 text-xs text-gray-700">${test}</td>`;
+                vals.forEach(v => tbl += `<td class="px-4 py-3 text-xs text-gray-600">${v !== undefined ? v.toFixed(3) : 'N/A'}</td>`);
+                if (numFiles === 2) {
+                    const [v1, v2] = vals;
+                    if (v1 !== undefined && v2 !== undefined) {
+                        const ch = v2 - v1, pct = v1 !== 0 ? (ch / v1) * 100 : 0;
+                        const dir = RADAR_KEY_METRICS[m];
+                        const good = dir === 'high' ? ch > 0 : (dir === 'low' ? ch < 0 : null);
+                        const cls = good === true ? 'text-green-600 font-semibold' : good === false ? 'text-red-600 font-semibold' : 'text-gray-600';
+                        tbl += `<td class="px-4 py-3 text-xs ${cls}">${ch > 0 ? '+' : ''}${ch.toFixed(3)}</td>`;
+                        tbl += `<td class="px-4 py-3 text-xs ${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</td>`;
+                    } else tbl += '<td class="px-4 py-3 text-xs text-gray-400">N/A</td><td class="px-4 py-3 text-xs text-gray-400">N/A</td>';
+                }
+                tbl += '</tr>';
+            });
+        });
+        tbl += '</tbody></table>';
+        summaryTableContainer.innerHTML = tbl;
+    }
+
+    // ---- #5 COP Scatter ----
+    function renderCOPScatter() {
+        destroyChart();
+        const selectedTest = copTestSelect.value;
+        const tests = selectedTest === 'all' ? Array.from(allTestConditions).sort() : [selectedTest];
+
+        const hasData = allParsedData.some(d => tests.some(t => d.tests[t]?.metrics['Sway Center Xo'] !== undefined));
+        if (!hasData) {
+            chartContainer.innerHTML = '<p class="flex items-center justify-center h-full text-gray-500 text-sm">No COP (Sway Center) data found in uploaded files.</p>';
+            summaryTableContainer.innerHTML = '<p class="text-gray-500 text-sm">No Sway Center Xo/Yo data available.</p>';
+            return;
+        }
+
+        const ctx = chartCanvas.getContext('2d');
+        const datasets = allParsedData.map((session, si) => {
+            const points = [];
+            tests.forEach(test => {
+                const xo = session.tests[test]?.metrics['Sway Center Xo'];
+                const yo = session.tests[test]?.metrics['Sway Center Yo'];
+                if (xo !== undefined && yo !== undefined) points.push({ x: xo * 1000, y: yo * 1000, test });
+            });
+            return { label: getLabel(session), data: points, backgroundColor: CHART_COLORS[si % CHART_COLORS.length].bg, borderColor: CHART_COLORS[si % CHART_COLORS.length].border, pointRadius: 8, pointHoverRadius: 11 };
+        });
+
+        resultsChart = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    title: { display: true, text: `COP Scatter — ${selectedTest === 'all' ? 'All Tests' : selectedTest}`, font: { size: 16 } },
+                    tooltip: { callbacks: { label: ctx => `${ctx.dataset.label} [${ctx.raw.test}]: X=${ctx.raw.x.toFixed(1)}mm, Y=${ctx.raw.y.toFixed(1)}mm` } }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Xo — Medial-Lateral (mm)' }, grid: { color: 'rgba(0,0,0,0.07)' } },
+                    y: { title: { display: true, text: 'Yo — Anterior-Posterior (mm)' }, grid: { color: 'rgba(0,0,0,0.07)' } }
+                }
+            }
+        });
+
+        // Summary table
+        let tbl = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
+        ['Test', ...allParsedData.map(d => getLabel(d) + ' Xo (mm)'), ...allParsedData.map(d => getLabel(d) + ' Yo (mm)')].forEach(h => {
+            tbl += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky top-0 bg-gray-50">${h}</th>`;
+        });
+        tbl += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        tests.forEach(test => {
+            tbl += `<tr><td class="px-4 py-3 text-xs font-medium text-gray-900">${test}</td>`;
+            allParsedData.forEach(s => { const v = s.tests[test]?.metrics['Sway Center Xo']; tbl += `<td class="px-4 py-3 text-xs text-gray-600">${v !== undefined ? (v * 1000).toFixed(2) : 'N/A'}</td>`; });
+            allParsedData.forEach(s => { const v = s.tests[test]?.metrics['Sway Center Yo']; tbl += `<td class="px-4 py-3 text-xs text-gray-600">${v !== undefined ? (v * 1000).toFixed(2) : 'N/A'}</td>`; });
+            tbl += '</tr>';
+        });
+        tbl += '</tbody></table>';
+        summaryTableContainer.innerHTML = tbl;
+    }
+
+    // ---- #8 Export ----
+    exportCsvBtn.addEventListener('click', () => {
+        const table = summaryTableContainer.querySelector('table');
+        if (!table) return;
+        const rows = Array.from(table.querySelectorAll('tr')).map(tr =>
+            Array.from(tr.querySelectorAll('th,td')).map(c => `"${c.innerText.replace(/"/g, '""')}"`).join(',')
+        );
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `posturography_${currentView}_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click(); URL.revokeObjectURL(a.href);
+    });
+
+    exportPngBtn.addEventListener('click', () => {
+        if (!resultsChart) return;
+        const a = document.createElement('a');
+        a.href = resultsChart.toBase64Image('image/png', 1.0);
+        a.download = `posturography_${currentView}_${new Date().toISOString().slice(0,10)}.png`;
+        a.click();
+    });
+
+    // ---- #7 Full Report ----
+    fullReportBtn.addEventListener('click', generateFullReport);
+
+    async function generateFullReport() {
+        fullReportBtn.disabled = true;
+        document.getElementById('full-report-btn-text').textContent = 'Generating...';
+        document.getElementById('full-report-loading').classList.remove('hidden');
+        setInterpretationStatus('Generating comprehensive report...');
+
+        const tests = Array.from(allTestConditions).sort();
+        const metrics = Array.from(allMetrics).filter(m => m !== 'Test Status' && m !== 'Stability Class').sort();
+        let dump = `POSTUROGRAPHY REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n\n`;
+
+        tests.forEach(test => {
+            dump += `=== ${test} ===\n`;
+            metrics.forEach(m => {
+                const vals = allParsedData.map(d => d.tests[test]?.metrics[m]);
+                if (!vals.some(v => v !== undefined)) return;
+                dump += `  ${m}: ${allParsedData.map((d, i) => { const v = vals[i]; return v !== undefined ? `${getLabel(d)}: ${typeof v === 'number' ? v.toFixed(3) : v}` : null; }).filter(Boolean).join(' | ')}\n`;
+                if (allParsedData.length === 2 && vals[0] !== undefined && vals[1] !== undefined && typeof vals[0] === 'number') {
+                    const ch = vals[1] - vals[0], pct = vals[0] !== 0 ? (ch / vals[0] * 100).toFixed(1) : 'N/A';
+                    const dir = RADAR_KEY_METRICS[m];
+                    const status = dir ? (dir === 'high' ? ch > 0 : ch < 0) ? '[IMPROVED]' : '[WORSENED]' : '';
+                    dump += `    → ${ch > 0 ? '+' : ''}${ch.toFixed(3)} (${ch > 0 ? '+' : ''}${pct}%) ${status}\n`;
+                }
+            });
+            dump += '\n';
+        });
+
+        const sys = `You are a clinical expert in vestibular and balance disorders with deep expertise in computerized dynamic posturography (CDP).
+Provide a comprehensive, structured interpretation of the data across ALL test conditions.
+Structure: Executive Summary → Test-by-Test Analysis → Key Patterns → Clinical Implications.
+- Executive summary: 2–3 sentences capturing the overall picture.
+- Highlight clinically significant changes (≥10% is typically meaningful).
+- Comment on sensory system patterns (visual, vestibular, somatosensory).
+- Be professional and evidence-based. Do not make a diagnosis.`;
+
+        try {
+            const text = await callAI(sys, `Interpret the following posturography data:\n\n${dump}`);
+            setInterpretationResult(text);
+        } catch (e) {
+            console.error('Full report error:', e);
+            setInterpretationStatus(`Error: ${e.message}\n\nIf this says "Failed to fetch", open this file via a local server (e.g. VS Code Live Server) rather than directly from the file system.`);
+        } finally {
+            fullReportBtn.disabled = false;
+            document.getElementById('full-report-btn-text').textContent = 'Full Report';
+            document.getElementById('full-report-loading').classList.add('hidden');
+            interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    // ---- Interpret current view ----
+    interpretationButton.addEventListener('click', getInterpretation);
+
+    async function getInterpretation() {
+        interpretationButton.disabled = true;
+        document.getElementById('interpret-button-text').textContent = 'Generating...';
+        document.getElementById('interpret-icon').classList.add('hidden');
+        document.getElementById('interpret-loading').classList.remove('hidden');
+        setInterpretationStatus('Analyzing...');
+        interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        const table = summaryTableContainer.querySelector('table');
+        if (!table) {
+            setInterpretationStatus('No summary data found. Please load data files first.');
+            resetInterpretBtn(); return;
+        }
+
+        // Use textContent (not innerText) — works regardless of overflow/layout
+        const summaryText = Array.from(table.querySelectorAll('tr')).map(tr =>
+            Array.from(tr.querySelectorAll('th,td')).map(c => c.textContent.trim()).join(' | ')
+        ).join('\n').trim();
+
+        if (!summaryText) {
+            setInterpretationStatus('Summary table is empty. Please select a metric or test condition.');
+            resetInterpretBtn(); return;
+        }
+
+        let sys = '', query = '';
+        if (currentView === 'metric') {
+            const m = metricSelect.value;
+            if (!m) { setInterpretationStatus('Please select a metric first.'); resetInterpretBtn(); return; }
+            sys = `You are a clinical expert in vestibular and balance disorders.
+Analyze posturography data for the metric: ${m}.
+- For n=2: focus on magnitude and direction of change between sessions.
+- For n>2: focus on mean and variability.
+- For n=1: describe relative to typical expectations.
+- Highlight which test conditions show the most significant findings.
+- Be concise, professional. Do not diagnose.
+Start with heading: "Interpretation: ${m}"`;
+            query = `Posturography data for "${m}":\n---\n${summaryText}\n---`;
+        } else if (currentView === 'radar') {
+            const t = testSelect.value;
+            if (!t) { setInterpretationStatus('Please select a test condition first.'); resetInterpretBtn(); return; }
+            sys = `You are a clinical expert in vestibular and balance disorders.
+Analyze the comprehensive profile for test condition: ${t}.
+- Compare sessions across all provided metrics.
+- For n=2: comment on overall profile change.
+- Be concise, professional. Do not diagnose.
+Start with: "Comprehensive Profile: ${t}"`;
+            query = `Key metrics for "${t}":\n---\n${summaryText}\n---`;
+        } else if (currentView === 'birdsEye') {
+            sys = `You are a clinical expert in vestibular and balance disorders.
+Analyze the birds eye posturography summary across all test conditions and key metrics.
+Identify overall performance patterns and highlight the most clinically notable findings.
+Do not diagnose. Start with: "Birds Eye Summary"`;
+            query = `Birds Eye data:\n---\n${summaryText}\n---`;
+        } else if (currentView === 'cop') {
+            sys = `You are a clinical expert in vestibular and balance disorders.
+Interpret the Center of Pressure (COP) scatter data. Comment on lateral/AP displacement patterns,
+asymmetry between test conditions, and any notable changes between sessions.
+Do not diagnose. Start with: "COP Analysis"`;
+            query = `COP Sway Center data (in mm):\n---\n${summaryText}\n---`;
+        }
+
+        try {
+            const result = await callAI(sys, query);
+            setInterpretationResult(result);
+        } catch (e) {
+            console.error('AI interpretation error:', e);
+            setInterpretationStatus(`Error: ${e.message}\n\nIf this says "Failed to fetch", open this file via a local server (e.g. VS Code Live Server) rather than directly from the file system.`);
+        } finally {
+            resetInterpretBtn();
+            interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    function resetInterpretBtn() {
+        interpretationButton.disabled = false;
+        document.getElementById('interpret-button-text').textContent = 'Interpret View';
+        document.getElementById('interpret-icon').classList.remove('hidden');
+        document.getElementById('interpret-loading').classList.add('hidden');
+    }
+
+    async function callAI(systemPrompt, userMessage) {
+        let response;
+        try {
+            response = await fetch('/api/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': _cfg.k,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({ model: _cfg.m, max_tokens: 1800, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] })
+            });
+        } catch (networkErr) {
+            throw new Error(`Network error: ${networkErr.message}. Make sure the server is running: open a terminal and run "node server.js" in the project folder.`);
+        }
+        if (!response.ok) { const e = await response.json().catch(() => ({})); throw new Error(e?.error?.message || `HTTP ${response.status}`); }
+        const result = await response.json();
+        if (result.content?.[0]?.text) return result.content[0].text;
+        throw new Error('Unexpected response format.');
+    }
+
+</script>
+</body>
+</html>
