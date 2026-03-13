@@ -1,6 +1,6 @@
 # Posturography Analyzer
 
-A lightweight browser-based dashboard for comparing CAPS EQ posturography PDF reports. The app parses uploaded PDFs in the browser, visualizes key balance metrics, exports results, and can generate AI-assisted clinical interpretation through a local Node.js proxy.
+A lightweight browser-based dashboard for comparing CAPS EQ posturography PDF reports. The app parses uploaded PDFs in the browser, visualizes key balance metrics, exports results, and can generate AI-assisted clinical interpretation through a local proxy or a Vercel serverless API route.
 
 ## Features
 
@@ -9,19 +9,23 @@ A lightweight browser-based dashboard for comparing CAPS EQ posturography PDF re
 - Compare sessions with bar charts, radar charts, birds-eye heatmaps, and COP scatter plots
 - Export visualization data to CSV and charts to PNG
 - Generate AI-assisted view interpretations and full summary reports
-- Run locally with a minimal Node.js server and no build step
+- Run locally with a minimal Node.js server
+- Deploy to Vercel with environment-variable based secret handling
 
 ## Tech Stack
 
 - Frontend: plain HTML, JavaScript, Tailwind via CDN
 - Charts: Chart.js
 - PDF parsing: PDF.js
-- Backend: Node.js `http`/`https` local proxy
+- Backend: Node.js local proxy and Vercel serverless function
 
 ## Project Structure
 
 - `pgr-2-0-1.html`: main single-page dashboard
-- `server.js`: local HTTP server and Anthropic proxy endpoint
+- `server.js`: local HTTP server for development
+- `api/messages.js`: Vercel serverless API route for Anthropic requests
+- `vercel.json`: Vercel routing configuration
+- `.env.example`: required environment variable example
 
 ## Requirements
 
@@ -31,6 +35,7 @@ A lightweight browser-based dashboard for comparing CAPS EQ posturography PDF re
 
 ## Run Locally
 
+1. Create a `.env` file from `.env.example` and add your Anthropic API key.
 1. Open a terminal in the project folder.
 2. Start the local server:
 
@@ -39,6 +44,26 @@ node server.js
 ```
 
 3. Open [http://127.0.0.1:3000](http://127.0.0.1:3000) in your browser.
+
+Example `.env`:
+
+```bash
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+```
+
+## Deploy To Vercel
+
+1. Push this project to GitHub, GitLab, or Bitbucket.
+2. In Vercel, import the repository.
+3. When Vercel asks for the framework preset, choose `Other`.
+4. Add the environment variable `ANTHROPIC_API_KEY` in the Vercel project settings.
+5. Deploy.
+
+Notes:
+
+- `vercel.json` rewrites `/` to `pgr-2-0-1.html`
+- `api/messages.js` handles `POST /api/messages`
+- The frontend no longer stores the Anthropic API key
 
 ## How To Use
 
@@ -70,25 +95,24 @@ The parser attempts to identify test conditions and metrics such as:
 - Directionality
 - Predicted Direction of Sway
 
-## Local API
+## API
 
-The local server exposes one proxy endpoint:
+Both local development and Vercel deployment expose the same endpoint:
 
-- `POST /api/messages`: forwards AI interpretation requests to Anthropic
+- `POST /api/messages`: forwards AI interpretation requests to Anthropic using the server-side `ANTHROPIC_API_KEY`
 
-The server also serves the dashboard HTML from the project root.
+Locally, `server.js` serves the dashboard and proxies API requests.
+On Vercel, `api/messages.js` handles the API route and `vercel.json` serves the dashboard at `/`.
 
 ## Security Notes
 
-This project works as a local prototype, but the current API setup is **not production-ready**.
+This project is safer for deployment than the original prototype, but you should still treat it as a controlled app rather than a public open API.
 
-- The frontend currently contains an Anthropic API key in client-side code. This is a secret exposure risk and should be removed immediately before sharing or deploying.
-- The proxy accepts `x-api-key` from the browser and forwards it upstream. In production, secrets should stay server-side only.
-- CORS is set to `*`, which is too permissive for anything beyond local development.
-- Static file serving uses request paths directly and should be hardened against path traversal before any broader use.
-- There is no authentication, rate limiting, request validation, or audit logging on the proxy endpoint.
-
-For a production deployment, move all secret handling to the server, validate request payloads, restrict origins, sanitize file paths, add authentication and rate limiting, and store configuration in environment variables.
+- The Anthropic API key is now expected only in server-side environment variables.
+- The frontend no longer sends secrets to the backend.
+- The API route validates request structure and caps request size.
+- The local static server now sanitizes file paths before reading from disk.
+- If you deploy publicly, consider adding authentication and rate limiting to the API route to prevent abuse.
 
 ## Limitations
 
@@ -99,5 +123,5 @@ For a production deployment, move all secret handling to the server, validate re
 
 ## Notes
 
-- The server binds to `127.0.0.1`, so it is only reachable from the local machine by default.
-- This project has no package manager setup because it relies on built-in Node.js modules and CDN-delivered frontend libraries.
+- The local server binds to `127.0.0.1`, so it is only reachable from the local machine by default.
+- The project relies on built-in Node.js modules and CDN-delivered frontend libraries, so no extra npm dependencies are required for the current setup.

@@ -149,7 +149,7 @@
 </div>
 
 <script type="module">
-    const _cfg = { k: "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", m: "claude-sonnet-4-6" };
+    const _cfg = { m: 'claude-sonnet-4-6' };
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
     let allParsedData = [];
@@ -1118,14 +1118,12 @@ Do not diagnose. Start with: "COP Analysis"`;
             response = await fetch('/api/messages', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': _cfg.k,
-                    'anthropic-version': '2023-06-01'
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ model: _cfg.m, max_tokens: 1800, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] })
             });
         } catch (networkErr) {
-            throw new Error(`Network error: ${networkErr.message}. Make sure the server is running: open a terminal and run "node server.js" in the project folder.`);
+            throw new Error(`Network error: ${networkErr.message}. Make sure the local server is running or that your Vercel deployment is configured with ANTHROPIC_API_KEY.`);
         }
         if (!response.ok) { const e = await response.json().catch(() => ({})); throw new Error(e?.error?.message || `HTTP ${response.status}`); }
         const result = await response.json();
