@@ -168,6 +168,8 @@
         'Directionality': 'low'
     };
 
+    const TEST_ORDER = ['NSEO', 'NSEC', 'PSEO', 'PSEC'];
+
     const CHART_COLORS = [
         { bg: 'rgba(59,130,246,0.4)', border: 'rgba(59,130,246,1)', solid: '#3b82f6' },
         { bg: 'rgba(239,68,68,0.4)',  border: 'rgba(239,68,68,1)',  solid: '#ef4444' },
@@ -178,6 +180,29 @@
     ];
 
     function getLabel(d) { return (d.label && d.label.trim()) ? d.label : d.fileName.replace(/\.pdf$/i, ''); }
+
+    function sortTestConditions(values) {
+        return [...values].sort((a, b) => {
+            const aBase = a.split(' ')[0];
+            const bBase = b.split(' ')[0];
+            const aIndex = TEST_ORDER.indexOf(aBase);
+            const bIndex = TEST_ORDER.indexOf(bBase);
+            const normalizedAIndex = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+            const normalizedBIndex = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+
+            if (normalizedAIndex !== normalizedBIndex) {
+                return normalizedAIndex - normalizedBIndex;
+            }
+
+            const aIsSingleCode = a === aBase;
+            const bIsSingleCode = b === bBase;
+            if (aIsSingleCode !== bIsSingleCode) {
+                return aIsSingleCode ? -1 : 1;
+            }
+
+            return a.localeCompare(b);
+        });
+    }
 
     // DOM
     const fileInput = document.getElementById('file-input');
@@ -546,14 +571,14 @@
 
     function populateTestSelect() {
         testSelect.innerHTML = '';
-        Array.from(allTestConditions).sort().forEach((t, i) => {
+        sortTestConditions(Array.from(allTestConditions)).forEach((t, i) => {
             testSelect.innerHTML += `<option value="${t}" ${i === 0 ? 'selected' : ''}>${t}</option>`;
         });
     }
 
     function populateCOPTestSelect() {
         copTestSelect.innerHTML = '<option value="all">All Tests</option>';
-        Array.from(allTestConditions).sort().forEach(t => {
+        sortTestConditions(Array.from(allTestConditions)).forEach(t => {
             copTestSelect.innerHTML += `<option value="${t}">${t}</option>`;
         });
     }
@@ -621,7 +646,7 @@
         allParsedData.forEach(d => Object.keys(d.tests).forEach(k => {
             if (d.tests[k].metrics[metric] !== undefined) commonTests.add(k);
         }));
-        const sortedTests = Array.from(commonTests).sort();
+        const sortedTests = sortTestConditions(Array.from(commonTests));
 
         const tableData = { header: ['Metric', 'Test', ...labels], rows: [] };
         if (numFiles === 2) { tableData.header.push('Change', '% Change'); }
@@ -797,7 +822,7 @@
     // ---- #2 Birds Eye heatmap ----
     function renderBirdsEye() {
         destroyChart();
-        const tests = Array.from(allTestConditions).sort();
+        const tests = sortTestConditions(Array.from(allTestConditions));
         const metrics = Object.keys(RADAR_KEY_METRICS).filter(m => allMetrics.has(m));
         if (!tests.length || !metrics.length) { birdsEyeContainer.innerHTML = '<p class="text-gray-500 p-4">No key metric data found.</p>'; return; }
 
@@ -904,7 +929,7 @@
     function renderCOPScatter() {
         destroyChart();
         const selectedTest = copTestSelect.value;
-        const tests = selectedTest === 'all' ? Array.from(allTestConditions).sort() : [selectedTest];
+        const tests = selectedTest === 'all' ? sortTestConditions(Array.from(allTestConditions)) : [selectedTest];
 
         const hasData = allParsedData.some(d => tests.some(t => d.tests[t]?.metrics['Sway Center Xo'] !== undefined));
         if (!hasData) {
@@ -987,7 +1012,7 @@
         document.getElementById('full-report-loading').classList.remove('hidden');
         setInterpretationStatus('Generating comprehensive report...');
 
-        const tests = Array.from(allTestConditions).sort();
+        const tests = sortTestConditions(Array.from(allTestConditions));
         const metrics = Array.from(allMetrics).filter(m => m !== 'Test Status' && m !== 'Stability Class').sort();
         let dump = `POSTUROGRAPHY REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n\n`;
 
