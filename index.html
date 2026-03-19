@@ -6,142 +6,386 @@
     <title>Posturography Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
-        #file-upload-area { border: 2px dashed #cbd5e1; transition: all 0.3s ease; }
-        #file-upload-area.dragover { border-color: #3b82f6; background-color: #eff6ff; }
-        .heatmap-cell { min-width: 90px; text-align: center; padding: 5px 6px; font-size: 11px; font-weight: 600; border: 1px solid #e5e7eb; }
-        #interpretation-output { white-space: pre-wrap; }
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #1c2330;
+            --border: #30363d;
+            --border2: #21262d;
+            --text: #e6edf3;
+            --text2: #8b949e;
+            --text3: #6e7681;
+            --accent: #58a6ff;
+            --accent2: #1f6feb;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --purple: #bc8cff;
+            --orange: #ffa657;
+            --teal: #39d353;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        code, .mono { font-family: 'IBM Plex Mono', monospace; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--surface); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+        /* Upload area */
+        #file-upload-area {
+            border: 2px dashed var(--border);
+            background: var(--surface2);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        #file-upload-area:hover, #file-upload-area.dragover {
+            border-color: var(--accent);
+            background: rgba(88,166,255,0.05);
+        }
+
+        /* File card */
+        .file-card {
+            background: var(--surface2);
+            border: 1px solid var(--border2);
+            transition: all 0.2s;
+        }
+        .file-card.selected { border-color: #238636; background: rgba(35,134,54,0.08); }
+        .file-card.dragging { opacity: 0.4; }
+        .file-card.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(88,166,255,0.2); }
+
+        /* Reorder buttons */
+        .reorder-button {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 6px;
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--text2); transition: all 0.15s; cursor: pointer;
+        }
+        .reorder-button:hover { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,0.1); }
+        .reorder-button:disabled { opacity: 0.25; cursor: not-allowed; }
+
+        /* Buttons */
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+        .btn-primary { background: var(--accent2); border-color: #388bfd; color: #fff; }
+        .btn-primary:hover { background: #388bfd; }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-green { background: #238636; border-color: #2ea043; color: #fff; }
+        .btn-green:hover { background: #2ea043; }
+        .btn-green:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-red { background: #b91c1c; border-color: #dc2626; color: #fff; }
+        .btn-red:hover { background: #dc2626; }
+        .btn-purple { background: #6f42c1; border-color: #8957e5; color: #fff; }
+        .btn-purple:hover { background: #8957e5; }
+        .btn-ghost { background: var(--surface2); border-color: var(--border); color: var(--text2); }
+        .btn-ghost:hover { border-color: var(--text3); color: var(--text); }
+
+        /* Panel */
+        .panel { background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; }
+        .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border2); font-weight: 600; font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+
+        /* Select */
+        select, input[type="text"] {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+            border-radius: 6px; padding: 7px 10px; font-size: 13px; width: 100%;
+            font-family: 'IBM Plex Sans', sans-serif;
+            transition: border-color 0.15s;
+        }
+        select:focus, input[type="text"]:focus { outline: none; border-color: var(--accent); }
+        select option { background: var(--surface2); }
+
+        /* Checkbox */
+        input[type="checkbox"] { accent-color: var(--green); width: 14px; height: 14px; cursor: pointer; }
+
+        /* Stat badge */
+        .stat-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 8px; border-radius: 4px; font-size: 11px;
+            font-family: 'IBM Plex Mono', monospace; font-weight: 500;
+        }
+        .badge-neutral { background: rgba(139,148,158,0.15); color: var(--text2); border: 1px solid var(--border2); }
+        .badge-good { background: rgba(63,185,80,0.12); color: var(--green); border: 1px solid rgba(63,185,80,0.25); }
+        .badge-warn { background: rgba(210,153,34,0.12); color: var(--yellow); border: 1px solid rgba(210,153,34,0.25); }
+        .badge-bad { background: rgba(248,81,73,0.12); color: var(--red); border: 1px solid rgba(248,81,73,0.25); }
+        .badge-info { background: rgba(88,166,255,0.1); color: var(--accent); border: 1px solid rgba(88,166,255,0.2); }
+        .badge-purple { background: rgba(188,140,255,0.1); color: var(--purple); border: 1px solid rgba(188,140,255,0.25); }
+
+        /* Stats panel sections */
+        .stat-section { border: 1px solid var(--border2); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+        .stat-section-header {
+            padding: 8px 12px; background: var(--surface2);
+            font-size: 11px; font-weight: 600; color: var(--text2);
+            text-transform: uppercase; letter-spacing: 0.08em;
+            display: flex; align-items: center; gap-6px; cursor: pointer;
+            user-select: none;
+        }
+        .stat-section-header:hover { color: var(--text); }
+        .stat-section-body { padding: 10px 12px; background: var(--bg); }
+
+        /* Stat row */
+        .stat-row { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; border-bottom: 1px solid rgba(48,54,61,0.5); }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-label { font-size: 11px; color: var(--text3); width: 110px; flex-shrink: 0; padding-top: 1px; font-family: 'IBM Plex Mono', monospace; }
+        .stat-value { font-size: 12px; color: var(--text); font-family: 'IBM Plex Mono', monospace; flex: 1; }
+        .stat-commentary { font-size: 11.5px; color: var(--text2); line-height: 1.5; flex: 2; font-style: italic; }
+
+        /* Heatmap */
+        .heatmap-cell { min-width: 90px; text-align: center; padding: 5px 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--border2); font-family: 'IBM Plex Mono', monospace; }
+
+        /* Verdict chip */
+        .verdict { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 12px; font-size: 10.5px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+        .verdict-reject { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+        .verdict-fail { background: rgba(139,148,158,0.12); color: var(--text3); border: 1px solid var(--border2); }
+        .verdict-consistent { background: rgba(63,185,80,0.12); color: var(--green); border: 1px solid rgba(63,185,80,0.25); }
+        .verdict-inconsistent { background: rgba(248,81,73,0.12); color: var(--red); border: 1px solid rgba(248,81,73,0.25); }
+
+        /* Table */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .data-table th { padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); background: var(--surface2); border-bottom: 1px solid var(--border2); position: sticky; top: 0; }
+        .data-table td { padding: 7px 12px; border-bottom: 1px solid rgba(48,54,61,0.4); color: var(--text2); font-family: 'IBM Plex Mono', monospace; }
+        .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .data-table td.td-name { color: var(--text); font-family: 'IBM Plex Sans', monospace; font-weight: 500; }
+        .td-good { color: var(--green) !important; font-weight: 600; }
+        .td-bad { color: var(--red) !important; font-weight: 600; }
+
+        /* Interpretation area */
+        #interpretation-output { white-space: pre-wrap; font-size: 13.5px; line-height: 1.7; color: var(--text2); }
+        #interpretation-output h3, #interpretation-output h4 { color: var(--text); margin-bottom: 6px; margin-top: 14px; }
+        #interpretation-output p { margin-bottom: 8px; }
+        #interpretation-output ul { padding-left: 20px; margin-bottom: 8px; }
+        #interpretation-output li { margin-bottom: 3px; }
+        #interpretation-output strong { color: var(--text); }
+
+        /* Spin */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 0.8s linear infinite; }
+
+        /* Chart */
+        canvas { background: transparent !important; }
+
+        /* Label */
+        label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 5px; font-weight: 500; }
+
+        /* Accordion arrow */
+        .acc-arrow { transition: transform 0.2s; display: inline-block; margin-left: auto; font-size: 10px; color: var(--text3); }
+        .acc-open .acc-arrow { transform: rotate(180deg); }
+
+        /* Tab */
+        .stat-tab { padding: 6px 12px; font-size: 11px; font-weight: 600; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
+        .stat-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .stat-tab:hover { color: var(--text); }
+
+        /* Tooltip */
+        [data-tip] { position: relative; }
+        [data-tip]:hover::after {
+            content: attr(data-tip);
+            position: absolute; bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%);
+            background: #2d333b; border: 1px solid var(--border); color: var(--text);
+            font-size: 11px; padding: 5px 8px; border-radius: 5px; white-space: nowrap; z-index: 100;
+            pointer-events: none; max-width: 220px; white-space: normal;
+        }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 antialiased">
+<body>
 
-<div class="container mx-auto p-4 md:p-8 max-w-7xl">
+<div style="max-width:1400px; margin:0 auto; padding: 24px 20px;">
 
-    <header class="mb-8">
-        <h1 class="text-4xl font-bold text-blue-700">Posturography Analysis Dashboard</h1>
-        <p class="text-lg text-gray-600 mt-2">Upload, analyze, and interpret posturography data sets.</p>
+    <!-- Header -->
+    <header style="margin-bottom:28px; padding-bottom:20px; border-bottom:1px solid var(--border2);">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+            <div style="width:32px;height:32px;background:var(--accent2);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M9 17v-2m3 2v-4m3 4v-6"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            </div>
+            <h1 style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px;">Posturography Analysis Dashboard</h1>
+        </div>
+        <p style="font-size:13px;color:var(--text3);margin-left:44px;">Statistical diagnostics · Clinical interpretation · Multi-session comparison</p>
     </header>
 
-    <div class="flex flex-col lg:flex-row gap-8">
+    <div style="display:flex; gap:20px; align-items:flex-start;">
 
-        <!-- Left Column -->
-        <div class="lg:w-1/3 space-y-6">
+        <!-- LEFT COLUMN -->
+        <div style="width:300px; flex-shrink:0; display:flex; flex-direction:column; gap:16px;">
 
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h2 class="text-2xl font-semibold mb-4 text-gray-700">1. Upload Data Files</h2>
-                <div id="file-upload-area" class="p-8 text-center rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input type="file" id="file-input" multiple accept=".pdf" class="hidden">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2H4a2 2 0 01-2-2z" />
-                    </svg>
-                    <p class="mt-2 text-sm text-gray-600"><span class="font-medium text-blue-600">Click to upload</span> or drag and drop</p>
-                    <p class="text-xs text-gray-500">CAPS EQ PDF reports (one or more)</p>
+            <!-- Upload -->
+            <div class="panel">
+                <div class="panel-header">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Upload Data Files
                 </div>
-                <div id="file-list" class="mt-4 space-y-2"></div>
-                <button id="reset-button" class="hidden mt-4 w-full bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition duration-300">Reset and Clear All</button>
+                <div style="padding:14px;">
+                    <div id="file-upload-area" class="rounded-lg p-6 text-center" style="border-radius:8px;">
+                        <input type="file" id="file-input" multiple accept=".pdf" class="hidden">
+                        <svg style="width:36px;height:36px;color:var(--text3);margin:0 auto 8px;" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2H4a2 2 0 01-2-2z" /></svg>
+                        <p style="font-size:12px;color:var(--text3);"><span style="color:var(--accent);font-weight:500;">Click to upload</span> or drag &amp; drop</p>
+                        <p style="font-size:11px;color:var(--text3);margin-top:3px;">CAPS EQ PDF reports</p>
+                    </div>
+                    <p id="file-list-helper" class="hidden" style="font-size:11px;color:var(--text3);margin-top:10px;">Select PDFs, drag to reorder sessions.</p>
+                    <div id="file-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
+                    <div id="file-action-buttons" class="hidden" style="display:none; gap:8px; margin-top:12px; flex-direction:row;">
+                        <button id="process-files-button" class="btn btn-green" style="flex:1;">Process</button>
+                        <button id="reset-button" class="btn btn-red" style="flex:1;">Reset</button>
+                    </div>
+                </div>
             </div>
 
-            <div id="controls-section" class="bg-white p-6 rounded-lg shadow-md hidden">
-                <h2 class="text-2xl font-semibold mb-4 text-gray-700">2. Select Analysis</h2>
-
-                <div class="mb-4">
-                    <label for="analysis-mode-select" class="block text-sm font-medium text-gray-700 mb-1">Analysis Mode</label>
-                    <select id="analysis-mode-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white">
-                        <option value="metric">Metric Comparison (Bar Chart)</option>
-                        <option value="radar">Comprehensive View (Radar)</option>
-                        <option value="birdsEye">Birds Eye View (Heatmap)</option>
-                        <option value="cop">COP Scatter Plot</option>
-                    </select>
+            <!-- Controls -->
+            <div id="controls-section" class="panel hidden">
+                <div class="panel-header">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M5.34 17.66l-1.41 1.41M4.93 4.93l1.41 1.41M17.66 18.34l1.41 1.41M1 12h2m18 0h2M12 1v2m0 18v2"/></svg>
+                    Analysis Controls
                 </div>
-
-                <div id="metric-controls">
-                    <label for="metric-select" class="block text-sm font-medium text-gray-700 mb-1">Select Metric</label>
-                    <select id="metric-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white"></select>
-                </div>
-
-                <div id="radar-controls" class="hidden space-y-4">
+                <div style="padding:14px; display:flex; flex-direction:column; gap:12px;">
                     <div>
-                        <label for="test-select" class="block text-sm font-medium text-gray-700 mb-1">Select Test Condition</label>
-                        <select id="test-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white"></select>
+                        <label>Analysis Mode</label>
+                        <select id="analysis-mode-select">
+                            <option value="metric">Metric Comparison (Line)</option>
+                            <option value="radar">Comprehensive View (Radar)</option>
+                            <option value="birdsEye">Birds Eye (Heatmap)</option>
+                            <option value="cop">COP Scatter Plot</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Radar Metrics</label>
-                        <div id="radar-metric-selector" class="grid grid-cols-2 gap-x-4 gap-y-2 max-h-48 overflow-y-auto p-3 border rounded-lg bg-gray-50"></div>
+                    <div id="metric-controls">
+                        <label>Select Metric</label>
+                        <select id="metric-select"></select>
                     </div>
-                </div>
-
-                <div id="cop-controls" class="hidden">
-                    <label for="cop-test-select" class="block text-sm font-medium text-gray-700 mb-1">Test Condition</label>
-                    <select id="cop-test-select" class="w-full p-2 border border-gray-300 rounded-lg bg-white"></select>
+                    <div id="radar-controls" class="hidden" style="display:flex;flex-direction:column;gap:10px;">
+                        <div>
+                            <label>Test Condition</label>
+                            <select id="test-select"></select>
+                        </div>
+                        <div>
+                            <label>Radar Metrics</label>
+                            <div id="radar-metric-selector" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;"></div>
+                        </div>
+                    </div>
+                    <div id="cop-controls" class="hidden">
+                        <label>Test Condition</label>
+                        <select id="cop-test-select"></select>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Right Column -->
-        <div class="lg:w-2/3 space-y-6">
+        <!-- RIGHT COLUMN -->
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:16px;">
 
-            <div id="placeholder" class="bg-white p-6 rounded-lg shadow-md text-center">
-                <svg class="mx-auto h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m-9 4H5l-2 2h2m10 0h2l2 2h-2m-4-4l-1.414-1.414A2 2 0 0011.172 10H10a2 2 0 00-2 2v4a2 2 0 002 2h1.172a2 2 0 001.414-.586L14 14m-4-4V7a2 2 0 012-2h2a2 2 0 012 2v3"></path></svg>
-                <h3 class="mt-2 text-xl font-medium text-gray-700">Waiting for data...</h3>
-                <p class="mt-1 text-sm text-gray-500">Upload one or more CAPS EQ PDF reports to begin.</p>
+            <!-- Placeholder -->
+            <div id="placeholder" class="panel" style="padding:60px 24px; text-align:center;">
+                <svg style="width:48px;height:48px;color:var(--text3);margin:0 auto 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m-9 4H5l-2 2h2m10 0h2l2 2h-2m-4-4l-1.414-1.414A2 2 0 0011.172 10H10a2 2 0 00-2 2v4a2 2 0 002 2h1.172a2 2 0 001.414-.586L14 14m-4-4V7a2 2 0 012-2h2a2 2 0 012 2v3"></path></svg>
+                <h3 style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Waiting for data</h3>
+                <p style="font-size:13px;color:var(--text3);">Upload CAPS EQ PDF reports to begin analysis.</p>
             </div>
 
-            <div id="loading" class="hidden bg-white p-6 rounded-lg shadow-md text-center">
-                <svg class="mx-auto h-12 w-12 text-blue-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <!-- Loading -->
+            <div id="loading" class="panel hidden" style="padding:60px 24px; text-align:center;">
+                <svg style="width:36px;height:36px;color:var(--accent);margin:0 auto 12px;" class="animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <h3 class="mt-2 text-xl font-medium text-gray-700">Parsing PDFs...</h3>
-                <p class="mt-1 text-sm text-gray-500">Extracting posturography data. Please wait.</p>
+                <p style="font-size:13px;color:var(--text3);">Parsing PDFs…</p>
             </div>
 
-            <div id="results-section" class="hidden space-y-6">
+            <!-- Results -->
+            <div id="results-section" class="hidden" style="display:flex;flex-direction:column;gap:16px;">
 
                 <!-- Visualization -->
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-2xl font-semibold text-gray-700">3. Visualization</h2>
-                        <div class="flex gap-2">
-                            <button id="export-png-btn" class="hidden text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg border transition">⬇ PNG</button>
-                            <button id="export-csv-btn" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg border transition">⬇ CSV</button>
+                <div class="panel">
+                    <div class="panel-header" style="justify-content:space-between;">
+                        <span style="display:flex;align-items:center;gap:8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            Visualization
+                        </span>
+                        <div style="display:flex;gap:6px;">
+                            <button id="export-png-btn" class="btn btn-ghost hidden" style="font-size:11px;padding:4px 10px;">⬇ PNG</button>
+                            <button id="export-csv-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">⬇ CSV</button>
                         </div>
                     </div>
-                    <div id="chart-container" class="relative h-96"><canvas id="results-chart"></canvas></div>
-                    <div id="birdsEye-container" class="hidden overflow-x-auto"></div>
-                    <p id="radar-disclaimer" class="hidden mt-4 text-xs text-gray-500 italic text-center">Values normalized 0–100. "100" = best performance. Tooltips show original values.</p>
+                    <div style="padding:16px;">
+                        <div id="chart-container" style="position:relative;height:340px;"><canvas id="results-chart"></canvas></div>
+                        <p id="line-chart-hint" class="hidden" style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">Click a point to add a comment annotation.</p>
+                        <div id="birdsEye-container" class="hidden"></div>
+                        <p id="radar-disclaimer" class="hidden" style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">Values normalized 0–100. "100" = best. Tooltips show original values.</p>
+                    </div>
+                </div>
+
+                <!-- Statistical Diagnostics Panel -->
+                <div class="panel" id="stats-panel">
+                    <div class="panel-header" style="justify-content:space-between; align-items:center;">
+                        <span style="display:flex;align-items:center;gap:8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-4"/></svg>
+                            Statistical Diagnostics
+                        </span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div id="stats-metric-selector" style="font-size:11px;color:var(--text3);"></div>
+                            <button id="run-stats-btn" class="btn btn-purple" style="font-size:11px;padding:4px 12px;">
+                                <svg id="stats-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707"/></svg>
+                                <svg id="stats-loading" class="hidden animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                Run Diagnostics
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stat tabs -->
+                    <div style="display:flex;gap:0;padding:0 16px;border-bottom:1px solid var(--border2);overflow-x:auto;" id="stat-tabs">
+                        <div class="stat-tab active" data-tab="descriptive">Descriptive</div>
+                        <div class="stat-tab" data-tab="inferential">Inferential</div>
+                        <div class="stat-tab" data-tab="correlation">Correlation</div>
+                        <div class="stat-tab" data-tab="regression">Regression</div>
+                        <div class="stat-tab" data-tab="multivariate">Multivariate</div>
+                        <div class="stat-tab" data-tab="longitudinal">Longitudinal</div>
+                    </div>
+
+                    <div style="padding:14px;" id="stats-content">
+                        <p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the current view.</p>
+                    </div>
                 </div>
 
                 <!-- Data Summary Table -->
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Data Summary</h2>
-                    <div id="summary-table-container" class="overflow-x-auto max-h-96 overflow-y-auto"></div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        Data Summary
+                    </div>
+                    <div style="padding:16px;">
+                        <div id="summary-table-container" style="overflow-x:auto;max-height:340px;overflow-y:auto;"></div>
+                    </div>
                 </div>
 
-                <!-- AI Interpretation -->
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                        <h2 class="text-2xl font-semibold text-gray-700">Clinical Interpretation</h2>
-                        <div class="flex flex-wrap gap-2 justify-end">
-                            <button id="full-report-btn" class="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition flex items-center gap-2 text-sm">
-                                <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <!-- Clinical Interpretation -->
+                <div class="panel">
+                    <div class="panel-header" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                        <span style="display:flex;align-items:center;gap:8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffa657" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                            Clinical Interpretation
+                        </span>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button id="full-report-btn" class="btn btn-purple">
+                                <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 <span id="full-report-btn-text">Full Report</span>
-                                <svg id="full-report-loading" class="hidden animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <svg id="full-report-loading" class="hidden animate-spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                             </button>
-                            <button id="interpretation-button" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm">
-                                <svg id="interpret-icon" class="h-4 w-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707" /></svg>
-                                <svg id="interpret-loading" class="hidden animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <button id="interpretation-button" class="btn btn-primary">
+                                <svg id="interpret-icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707"/></svg>
+                                <svg id="interpret-loading" class="hidden animate-spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                                 <span id="interpret-button-text">Interpret View</span>
                             </button>
                         </div>
                     </div>
-                    <div id="interpretation-output" class="p-4 bg-gray-50 rounded-lg min-h-[100px] text-gray-600">Click a button to generate an AI-powered clinical interpretation.</div>
+                    <div style="padding:16px;">
+                        <div id="interpretation-output" style="padding:14px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;min-height:80px;">
+                            Click a button to generate an AI-powered clinical interpretation.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -149,14 +393,19 @@
 </div>
 
 <script type="module">
-    const AI_REQUEST_DEFAULTS = { maxTokens: 1800 };
+    if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
+    const AI_REQUEST_DEFAULTS = { maxTokens: 3000 };
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
     let allParsedData = [];
+    let uploadedParsedData = [];
+    let draggedFileIndex = null;
+    let pointAnnotations = {};
     let allMetrics = new Set();
     let allTestConditions = new Set();
     let resultsChart = null;
     let currentView = 'metric';
+    let activeStatTab = 'descriptive';
 
     const RADAR_KEY_METRICS = {
         'Stability Score': 'high',
@@ -171,43 +420,41 @@
     const TEST_ORDER = ['NSEO', 'NSEC', 'PSEO', 'PSEC'];
 
     const CHART_COLORS = [
-        { bg: 'rgba(59,130,246,0.4)', border: 'rgba(59,130,246,1)', solid: '#3b82f6' },
-        { bg: 'rgba(239,68,68,0.4)',  border: 'rgba(239,68,68,1)',  solid: '#ef4444' },
-        { bg: 'rgba(22,163,74,0.4)',  border: 'rgba(22,163,74,1)',  solid: '#16a34a' },
-        { bg: 'rgba(245,158,11,0.4)', border: 'rgba(245,158,11,1)', solid: '#f59e0b' },
-        { bg: 'rgba(107,114,128,0.4)',border: 'rgba(107,114,128,1)',solid: '#6b7280' },
-        { bg: 'rgba(139,92,246,0.4)', border: 'rgba(139,92,246,1)', solid: '#8b5cf6' },
+        { bg: 'rgba(88,166,255,0.3)',  border: 'rgba(88,166,255,1)',  solid: '#58a6ff' },
+        { bg: 'rgba(248,81,73,0.3)',   border: 'rgba(248,81,73,1)',   solid: '#f85149' },
+        { bg: 'rgba(63,185,80,0.3)',   border: 'rgba(63,185,80,1)',   solid: '#3fb950' },
+        { bg: 'rgba(255,166,87,0.3)',  border: 'rgba(255,166,87,1)',  solid: '#ffa657' },
+        { bg: 'rgba(139,148,158,0.3)', border: 'rgba(139,148,158,1)', solid: '#8b949e' },
+        { bg: 'rgba(188,140,255,0.3)', border: 'rgba(188,140,255,1)', solid: '#bc8cff' },
+        { bg: 'rgba(57,211,83,0.3)',   border: 'rgba(57,211,83,1)',   solid: '#39d353' },
+        { bg: 'rgba(210,153,34,0.3)',  border: 'rgba(210,153,34,1)',  solid: '#d29922' },
     ];
+
+    // Chart.js dark defaults
+    Chart.defaults.color = '#8b949e';
+    Chart.defaults.borderColor = '#30363d';
 
     function getLabel(d) { return (d.label && d.label.trim()) ? d.label : d.fileName.replace(/\.pdf$/i, ''); }
 
     function sortTestConditions(values) {
         return [...values].sort((a, b) => {
-            const aBase = a.split(' ')[0];
-            const bBase = b.split(' ')[0];
-            const aIndex = TEST_ORDER.indexOf(aBase);
-            const bIndex = TEST_ORDER.indexOf(bBase);
-            const normalizedAIndex = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
-            const normalizedBIndex = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
-
-            if (normalizedAIndex !== normalizedBIndex) {
-                return normalizedAIndex - normalizedBIndex;
-            }
-
-            const aIsSingleCode = a === aBase;
-            const bIsSingleCode = b === bBase;
-            if (aIsSingleCode !== bIsSingleCode) {
-                return aIsSingleCode ? -1 : 1;
-            }
-
+            const aBase = a.split(' ')[0], bBase = b.split(' ')[0];
+            const aI = TEST_ORDER.indexOf(aBase), bI = TEST_ORDER.indexOf(bBase);
+            const na = aI === -1 ? 999 : aI, nb = bI === -1 ? 999 : bI;
+            if (na !== nb) return na - nb;
+            const aS = a === aBase, bS = b === bBase;
+            if (aS !== bS) return aS ? -1 : 1;
             return a.localeCompare(b);
         });
     }
 
-    // DOM
+    // ---- DOM refs ----
     const fileInput = document.getElementById('file-input');
     const fileUploadArea = document.getElementById('file-upload-area');
+    const fileListHelper = document.getElementById('file-list-helper');
     const fileList = document.getElementById('file-list');
+    const fileActionButtons = document.getElementById('file-action-buttons');
+    const processFilesButton = document.getElementById('process-files-button');
     const resetButton = document.getElementById('reset-button');
     const controlsSection = document.getElementById('controls-section');
     const analysisModeSelect = document.getElementById('analysis-mode-select');
@@ -231,87 +478,633 @@
     const fullReportBtn = document.getElementById('full-report-btn');
     const exportPngBtn = document.getElementById('export-png-btn');
     const exportCsvBtn = document.getElementById('export-csv-btn');
+    const statsContent = document.getElementById('stats-content');
+    const runStatsBtn = document.getElementById('run-stats-btn');
 
-    function escapeHtml(value) {
-        return String(value).replace(/[&<>"']/g, char => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-        })[char]);
+    // ---- Markdown ----
+    function escapeHtml(v) { return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+    function fmtInline(text) {
+        let e = escapeHtml(text);
+        e = e.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        e = e.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        return e;
+    }
+    function renderMd(md) {
+        const lines = String(md||'').replace(/\r\n/g,'\n').split('\n');
+        const out = []; let pLines = [], liItems = [];
+        const flushP = () => { if (!pLines.length) return; out.push(`<p>${pLines.join('<br>')}</p>`); pLines=[]; };
+        const flushL = () => { if (!liItems.length) return; out.push(`<ul class="list-disc pl-5 mb-2 space-y-1">${liItems.join('')}</ul>`); liItems=[]; };
+        for (const raw of lines) {
+            const ln = raw.trim();
+            if (!ln) { flushP(); flushL(); continue; }
+            const hm = ln.match(/^(#{1,6})\s+(.*)$/);
+            if (hm) { flushP(); flushL(); const lv = Math.min(hm[1].length+2,6); out.push(`<h${lv} style="font-weight:600;color:var(--text);margin-bottom:5px;margin-top:12px;">${fmtInline(hm[2])}</h${lv}>`); continue; }
+            const bm = ln.match(/^[-*]\s+(.*)$/);
+            if (bm) { flushP(); liItems.push(`<li>${fmtInline(bm[1])}</li>`); continue; }
+            flushL(); pLines.push(fmtInline(ln));
+        }
+        flushP(); flushL();
+        return out.join('') || `<p>${escapeHtml(md||'')}</p>`;
     }
 
-    function formatInlineMarkdown(text) {
-        let escaped = escapeHtml(text);
-        escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        escaped = escaped.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        return escaped;
+    // ---- Stats helpers ----
+    function toNum(v) {
+        if (typeof v==='number' && Number.isFinite(v)) return v;
+        if (typeof v==='string') { const n=parseFloat(v); return Number.isFinite(n)?n:undefined; }
+        return undefined;
+    }
+    function numSeries(vals) { return vals.map(toNum).filter(v=>v!==undefined); }
+    function mean(arr) { return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:undefined; }
+    function median(arr) {
+        if (!arr.length) return undefined;
+        const s=[...arr].sort((a,b)=>a-b), m=Math.floor(s.length/2);
+        return s.length%2===0?(s[m-1]+s[m])/2:s[m];
+    }
+    function sdSample(arr) {
+        if (arr.length<2) return undefined;
+        const m=mean(arr);
+        return Math.sqrt(arr.map(x=>(x-m)**2).reduce((a,b)=>a+b,0)/(arr.length-1));
+    }
+    function sdPop(arr) {
+        if (arr.length<2) return undefined;
+        const m=mean(arr);
+        return Math.sqrt(arr.map(x=>(x-m)**2).reduce((a,b)=>a+b,0)/arr.length);
+    }
+    function quantile(sorted, q) {
+        const pos=(sorted.length-1)*q, base=Math.floor(pos), rest=pos-base;
+        return sorted[base+1]===undefined ? sorted[base] : sorted[base]+rest*(sorted[base+1]-sorted[base]);
+    }
+    function descStats(vals) {
+        const n=numSeries(vals); if (!n.length) return undefined;
+        const s=[...n].sort((a,b)=>a-b), m=mean(n), sd=sdSample(n), med=median(n);
+        const q25=quantile(s,0.25), q75=quantile(s,0.75), iqr=q75-q25;
+        const cv=(m&&m!==0&&sd!==undefined)?(sd/Math.abs(m))*100:undefined;
+        const skew=n.length>=3&&sd? n.reduce((a,v)=>a+((v-m)/sd)**3,0)/n.length : undefined;
+        return { n:n.length, mean:m, median:med, sd, min:s[0], max:s[s.length-1], q25, q75, iqr, cv, range:s[s.length-1]-s[0], skew };
+    }
+    function pearson(x,y) {
+        if (x.length!==y.length||x.length<2) return undefined;
+        const mx=mean(x), my=mean(y);
+        const num=x.reduce((a,v,i)=>a+(v-mx)*(y[i]-my),0);
+        const den=Math.sqrt(x.reduce((a,v)=>a+(v-mx)**2,0)*y.reduce((a,v)=>a+(v-my)**2,0));
+        return den?num/den:0;
+    }
+    function rankTies(vals) {
+        const p=vals.map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v), r=new Array(vals.length);
+        let i=0;
+        while(i<p.length){let j=i;while(j+1<p.length&&p[j+1].v===p[i].v)j++;const avg=(i+1+(j+1))/2;for(let k=i;k<=j;k++)r[p[k].i]=avg;i=j+1;}
+        return r;
+    }
+    function spearman(x,y) { if(x.length!==y.length||x.length<2)return undefined; return pearson(rankTies(x),rankTies(y)); }
+    function linReg(x,y) {
+        if(x.length!==y.length||x.length<2)return undefined;
+        const mx=mean(x), my=mean(y);
+        const sxx=x.reduce((a,v)=>a+(v-mx)**2,0); if(!sxx)return undefined;
+        const sxy=x.reduce((a,v,i)=>a+(v-mx)*(y[i]-my),0);
+        const b=sxy/sxx, a2=my-b*mx;
+        const yH=x.map(v=>a2+b*v), ssTot=y.reduce((a,v)=>a+(v-my)**2,0), ssRes=y.reduce((a,v,i)=>a+(v-yH[i])**2,0);
+        return { intercept:a2, slope:b, r2:ssTot?1-ssRes/ssTot:0 };
+    }
+    function shuffle(arr) { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a; }
+    function permPCorr(x,y,iters=300) {
+        const obs=pearson(x,y); if(obs===undefined)return undefined;
+        const absObs=Math.abs(obs); let c=0;
+        for(let i=0;i<iters;i++){const r=pearson(x,shuffle(y));if(r!==undefined&&Math.abs(r)>=absObs)c++;}
+        return c/iters;
+    }
+    function permPSlope(x,y,iters=300) {
+        const obs=linReg(x,y); if(!obs)return undefined;
+        const absObs=Math.abs(obs.slope); let c=0;
+        for(let i=0;i<iters;i++){const r=linReg(x,shuffle(y));if(r&&Math.abs(r.slope)>=absObs)c++;}
+        return c/iters;
+    }
+    function permPMeanDiff(a,b,iters=300) {
+        const av=numSeries(a), bv=numSeries(b);
+        if(av.length<2||bv.length<2)return undefined;
+        const obs=mean(bv)-mean(av), absObs=Math.abs(obs);
+        const combined=[...av,...bv], nA=av.length; let c=0;
+        for(let i=0;i<iters;i++){const s=shuffle(combined);const diff=mean(s.slice(nA))-mean(s.slice(0,nA));if(Math.abs(diff)>=absObs)c++;}
+        return c/iters;
+    }
+    function tTestOneSample(vals, mu0=0) {
+        // returns t statistic and approximate two-tailed p via permutation
+        const n=vals.length; if(n<2)return undefined;
+        const m=mean(vals), sd2=sdSample(vals);
+        if(!sd2)return undefined;
+        const t=((m-mu0)/(sd2/Math.sqrt(n)));
+        return { t, n, mean:m, sd:sd2 };
+    }
+    function cohenD(a,b) {
+        const av=numSeries(a), bv=numSeries(b);
+        if(av.length<1||bv.length<1)return undefined;
+        const ma=mean(av),mb=mean(bv);
+        const pooled=Math.sqrt(((av.length-1)*sdSample(av)**2+(bv.length-1)*sdSample(bv)**2)/(av.length+bv.length-2));
+        return pooled?Math.abs(mb-ma)/pooled:undefined;
     }
 
-    function renderInterpretationMarkdown(markdown) {
-        const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n');
-        const htmlParts = [];
-        let paragraphLines = [];
-        let listItems = [];
+    function pca2(features) {
+        const names=Object.keys(features), n=features[names[0]]?.length||0;
+        if(!n||names.length<2)return undefined;
+        const vectors=names.map(nm=>{
+            const v=features[nm].map(toNum).map(x=>x===undefined?NaN:x);
+            const clean=v.filter(x=>Number.isFinite(x));
+            const m=mean(clean), sd2=sdSample(clean)||1;
+            return v.map(x=>Number.isFinite(x)?(x-m)/sd2:0);
+        });
+        const k=names.length;
+        const cov=Array.from({length:k},()=>Array.from({length:k},()=>0));
+        for(let i=0;i<k;i++){for(let j=i;j<k;j++){let s=0,cnt=0;for(let t=0;t<n;t++){const xi=vectors[i][t],xj=vectors[j][t];if(Number.isFinite(xi)&&Number.isFinite(xj)){s+=xi*xj;cnt++;}}const v=cnt?s/(cnt-1||1):0;cov[i][j]=v;cov[j][i]=v;}}
+        let covR=cov.map(r=>[...r]);
+        const comps=[]; const expl=[];
+        function powerIter(A){
+            const d=A.length; let v=Array.from({length:d},(_,i)=>(i+1)/d);
+            const n0=Math.sqrt(v.reduce((a,x)=>a+x*x,0))||1; v=v.map(x=>x/n0);
+            for(let it=0;it<80;it++){const Av=A.map(r=>r.reduce((a,vl,j)=>a+vl*v[j],0));const nm=Math.sqrt(Av.reduce((a,x)=>a+x*x,0))||1;const vN=Av.map(x=>x/nm);const diff=vN.reduce((a,x,i)=>a+(x-v[i])**2,0);v=vN;if(diff<1e-8)break;}
+            const Av=A.map(r=>r.reduce((a,vl,j)=>a+vl*v[j],0));const eig=v.reduce((a,x,i)=>a+x*Av[i],0);return{v,eig};
+        }
+        for(let c=0;c<2;c++){
+            const res=powerIter(covR); comps.push(res.v); expl.push(res.eig);
+            for(let i=0;i<covR.length;i++)for(let j=0;j<covR.length;j++)covR[i][j]-=res.eig*res.v[i]*res.v[j];
+        }
+        const tot=expl.reduce((a,b)=>a+b,0)||1;
+        const loadings=comps[0].map((val,idx)=>({name:names[idx],loading:val})).sort((a,b)=>Math.abs(b.loading)-Math.abs(a.loading));
+        return { explainedRatios:expl.map(e=>e/tot), loadings, pc1ExplainedPct:(expl[0]/tot)*100 };
+    }
 
-        const flushParagraph = () => {
-            if (!paragraphLines.length) return;
-            const content = paragraphLines.join('<br>');
-            htmlParts.push(`<p class="mb-3 last:mb-0">${content}</p>`);
-            paragraphLines = [];
-        };
+    function getSeriesFor(testKey, metricKey) {
+        return allParsedData.map(d=>toNum(d.tests?.[testKey]?.metrics?.[metricKey]));
+    }
 
-        const flushList = () => {
-            if (!listItems.length) return;
-            htmlParts.push(`<ul class="list-disc pl-5 mb-3 space-y-1">${listItems.join('')}</ul>`);
-            listItems = [];
-        };
+    // ---- Consistency commentary generator ----
+    function consistencyComment(sd, cv, n, metricName, dir, context='') {
+        if(sd===undefined||n<2) return '';
+        const threshold_cv_high=25, threshold_cv_moderate=12;
+        const isHighSD = cv!==undefined ? cv > threshold_cv_high : false;
+        const isModeratrSD = cv!==undefined ? cv > threshold_cv_moderate && cv <= threshold_cv_high : false;
+        const isLowSD = cv!==undefined ? cv <= threshold_cv_moderate : false;
 
-        for (const rawLine of lines) {
-            const line = rawLine.trim();
-            if (!line) {
-                flushParagraph();
-                flushList();
-                continue;
+        if(isHighSD) return `⚠ High variability (CV=${cv.toFixed(1)}%) across ${n} ${context}. The spread in ${metricName} scores is clinically notable — results are inconsistent and may reflect true trial-to-trial fluctuation, patient instability, or measurement artifact.`;
+        if(isModeratrSD) return `Moderate variability (CV=${cv.toFixed(1)}%) across ${n} ${context}. Some fluctuation in ${metricName} is present but within an acceptable range; consider whether this reflects genuine performance variation or noise.`;
+        if(isLowSD) return `✓ Low variability (CV=${cv.toFixed(1)}%) across ${n} ${context}. ${metricName} is highly consistent — the dataset supports reliable interpretation of this measure.`;
+        return `SD=${sd.toFixed(3)} across ${n} ${context}.`;
+    }
+
+    function pValueComment(p, alpha=0.05) {
+        if(p===undefined) return '';
+        if(p<0.001) return `p<0.001 — strong evidence against H₀`;
+        if(p<alpha) return `p=${p.toFixed(3)} — statistically significant (α=${alpha})`;
+        if(p<0.1) return `p=${p.toFixed(3)} — trend toward significance`;
+        return `p=${p.toFixed(3)} — not significant (fail to reject H₀)`;
+    }
+
+    function effectSizeComment(d) {
+        if(d===undefined) return '';
+        if(d<0.2) return `negligible (d=${d.toFixed(2)})`;
+        if(d<0.5) return `small (d=${d.toFixed(2)})`;
+        if(d<0.8) return `medium (d=${d.toFixed(2)})`;
+        return `large (d=${d.toFixed(2)})`;
+    }
+
+    function rComment(r) {
+        if(r===undefined) return '';
+        const ar=Math.abs(r);
+        if(ar>0.8) return `very strong (r=${r.toFixed(3)})`;
+        if(ar>0.6) return `strong (r=${r.toFixed(3)})`;
+        if(ar>0.4) return `moderate (r=${r.toFixed(3)})`;
+        if(ar>0.2) return `weak (r=${r.toFixed(3)})`;
+        return `negligible (r=${r.toFixed(3)})`;
+    }
+
+    function trendComment(slope, r2, permP, metric, dir) {
+        if(slope===undefined||r2===undefined) return 'Insufficient data for trend analysis.';
+        const isGoodDir = dir === 'high' ? slope > 0 : (dir === 'low' ? slope < 0 : null);
+        const sig = permP !== undefined && permP < 0.05;
+        let dirWord = slope > 0 ? 'increasing' : 'decreasing';
+        let arrow = slope > 0 ? '↑' : '↓';
+        let dirLabel = isGoodDir === true ? '(favorable direction)' : isGoodDir === false ? '(unfavorable direction)' : '';
+        let sigWord = sig ? 'significant' : 'non-significant';
+        return `${arrow} ${dirWord} trend ${dirLabel} — slope=${slope.toFixed(4)}, R²=${r2.toFixed(3)} (${sigWord}, perm-p=${permP!==undefined?permP.toFixed(3):'N/A'}).${r2 > 0.7 ? ' Strong linear fit — high confidence in trajectory.' : r2 > 0.4 ? ' Moderate linear fit.' : ' Weak linear fit — interpret with caution.'}`;
+    }
+
+    // ---- Main diagnostics engine ----
+    function computeAllDiagnostics() {
+        const tests = sortTestConditions(Array.from(allTestConditions));
+        const metrics = Array.from(allMetrics).filter(m=>m!=='Test Status'&&m!=='Stability Class').sort();
+        const KEY = ['Stability Score','Fatigue Ratio','Adaptation Ratio','Sway Path Length','Sway Velocity (Ave)','Area 95% Conf. Ellipse'];
+        const n = allParsedData.length;
+
+        const results = { descriptive:{}, inferential:{}, correlation:{}, regression:{}, multivariate:{}, longitudinal:{} };
+
+        // ---- DESCRIPTIVE ----
+        // Per metric, per test condition: full descriptive statistics with consistency commentary
+        tests.forEach(tk => {
+            results.descriptive[tk] = {};
+            metrics.forEach(m => {
+                const series = getSeriesFor(tk, m);
+                const nums = numSeries(series);
+                if(!nums.length) return;
+                const ds = descStats(nums);
+                const dir = RADAR_KEY_METRICS[m];
+                const comment = n >= 2 ? consistencyComment(ds.sd, ds.cv, n, m, dir, 'sessions') : `n=1: single observation. SD not applicable.`;
+                results.descriptive[tk][m] = { ...ds, comment };
+            });
+        });
+
+        // ---- INFERENTIAL ----
+        // For each key metric × test: permutation-based mean difference (early vs late), one-sample t,
+        // Cohen's d between first and last session, consistency rank
+        tests.forEach(tk => {
+            results.inferential[tk] = {};
+            KEY.forEach(m => {
+                if(!allMetrics.has(m)) return;
+                const series = getSeriesFor(tk, m);
+                const nums = numSeries(series);
+                if(nums.length < 2) return;
+
+                const entry = {};
+                // Cohen's d: first vs last
+                if(nums.length >= 2) {
+                    const d = cohenD([nums[0]], [nums[nums.length-1]]);
+                    entry.cohenD = d;
+                    entry.cohenDComment = d !== undefined ? `Effect size first→last: ${effectSizeComment(d)}` : '';
+                }
+                // Early vs late mean diff (if ≥4 sessions)
+                if(nums.length >= 4) {
+                    const mid=Math.floor(nums.length/2);
+                    const early=nums.slice(0,mid), late=nums.slice(mid);
+                    const pDiff = permPMeanDiff(early, late, 300);
+                    const diff = mean(late) - mean(early);
+                    const dir = RADAR_KEY_METRICS[m];
+                    const favorable = dir==='high' ? diff>0 : dir==='low' ? diff<0 : null;
+                    entry.earlyLateDiff = diff;
+                    entry.earlyLateP = pDiff;
+                    entry.earlyLateFavorable = favorable;
+                    entry.earlyLateComment = `Early sessions mean=${mean(early).toFixed(3)} vs late mean=${mean(late).toFixed(3)}. Diff=${diff>0?'+':''}${diff.toFixed(3)} (${pValueComment(pDiff)})${favorable===true?' — FAVORABLE ✓':favorable===false?' — UNFAVORABLE ✗':''}.`;
+                }
+                // SD consistency rank across test conditions
+                const sdList = tests.map(t2=>{const s=getSeriesFor(t2,m);const d=descStats(s);return d?.sd;}).filter(v=>v!==undefined);
+                const mySD = descStats(nums)?.sd;
+                if(mySD!==undefined && sdList.length>1) {
+                    const rank = sdList.filter(v=>v<=mySD).length;
+                    const consistencyPct = (rank/sdList.length)*100;
+                    entry.consistencyRank = rank;
+                    entry.consistencyPct = consistencyPct;
+                    entry.consistencyComment = `SD consistency rank: ${rank}/${sdList.length} conditions (${consistencyPct.toFixed(0)}th pctile). ${consistencyPct>75?'This test condition shows RELATIVELY HIGH variability for this metric.':consistencyPct<25?'This test condition is RELATIVELY CONSISTENT for this metric.':'Moderate consistency relative to other conditions.'}`;
+                }
+                results.inferential[tk][m] = entry;
+            });
+        });
+
+        // ---- CORRELATION ----
+        // Pairwise correlations between all key metrics, per test condition
+        tests.forEach(tk => {
+            results.correlation[tk] = [];
+            const availMetrics = KEY.filter(m=>allMetrics.has(m)&&numSeries(getSeriesFor(tk,m)).length>=3);
+            for(let i=0;i<availMetrics.length;i++){
+                for(let j=i+1;j<availMetrics.length;j++){
+                    const m1=availMetrics[i], m2=availMetrics[j];
+                    const pairs=[];
+                    allParsedData.forEach(d=>{
+                        const v1=toNum(d.tests?.[tk]?.metrics?.[m1]), v2=toNum(d.tests?.[tk]?.metrics?.[m2]);
+                        if(v1!==undefined&&v2!==undefined) pairs.push([v1,v2]);
+                    });
+                    if(pairs.length<3) continue;
+                    const xs=pairs.map(p=>p[0]), ys=pairs.map(p=>p[1]);
+                    const r=pearson(xs,ys), rho=spearman(xs,ys);
+                    const pP=permPCorr(xs,ys,300);
+                    const sig=pP!==undefined&&pP<0.05;
+                    results.correlation[tk].push({
+                        m1,m2,r,rho,p:pP,
+                        comment:`${m1} vs ${m2}: Pearson ${rComment(r)}, Spearman ρ=${rho!==undefined?rho.toFixed(3):'N/A'}. ${pValueComment(pP)}. ${sig?'Statistically significant association.':'No significant association at α=0.05.'}`
+                    });
+                }
             }
+        });
 
-            const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
-            if (headingMatch) {
-                flushParagraph();
-                flushList();
-                const level = Math.min(headingMatch[1].length + 2, 6);
-                const sizeClass = level <= 2 ? 'text-lg font-semibold' : 'text-base font-semibold';
-                htmlParts.push(`<h${level} class="${sizeClass} text-gray-800 mb-2">${formatInlineMarkdown(headingMatch[2])}</h${level}>`);
-                continue;
-            }
+        // ---- REGRESSION ----
+        // Linear regression: each key metric predicted from session index (time) + selected pairs
+        tests.forEach(tk => {
+            results.regression[tk] = [];
+            KEY.filter(m=>allMetrics.has(m)).forEach(m => {
+                const series = getSeriesFor(tk, m);
+                const pairs = [];
+                series.forEach((v,idx)=>{ if(v!==undefined)pairs.push([idx,v]); });
+                if(pairs.length<3) return;
+                const xs=pairs.map(p=>p[0]), ys=pairs.map(p=>p[1]);
+                const reg=linReg(xs,ys);
+                if(!reg) return;
+                const pSlope=permPSlope(xs,ys,300);
+                const dir=RADAR_KEY_METRICS[m];
+                const favorable=dir==='high'?reg.slope>0:dir==='low'?reg.slope<0:null;
+                results.regression[tk].push({
+                    metric:m, slope:reg.slope, intercept:reg.intercept, r2:reg.r2, p:pSlope, favorable,
+                    comment:`${m} ~ session: slope=${reg.slope>0?'+':''}${reg.slope.toFixed(4)}, R²=${reg.r2.toFixed(3)}. ${pValueComment(pSlope)}${favorable===true?' Trajectory is in the FAVORABLE direction ✓':favorable===false?' Trajectory is UNFAVORABLE ✗':''}.`
+                });
+            });
+        });
 
-            const bulletMatch = line.match(/^[-*]\s+(.*)$/);
-            if (bulletMatch) {
-                flushParagraph();
-                listItems.push(`<li>${formatInlineMarkdown(bulletMatch[1])}</li>`);
-                continue;
-            }
+        // ---- MULTIVARIATE ----
+        // PCA on key metrics per test condition
+        tests.forEach(tk => {
+            const feats={};
+            KEY.filter(m=>allMetrics.has(m)).forEach(m=>{
+                const s=getSeriesFor(tk,m).map(v=>v!==undefined?v:NaN);
+                feats[m]=s;
+            });
+            if(Object.keys(feats).length<3) { results.multivariate[tk]=null; return; }
+            const pc=pca2(feats);
+            if(!pc) { results.multivariate[tk]=null; return; }
+            const top3=pc.loadings.slice(0,3);
+            results.multivariate[tk] = {
+                pc1Pct: pc.pc1ExplainedPct,
+                top: top3,
+                comment: `PC1 captures ${pc.pc1ExplainedPct.toFixed(1)}% of variance. Dominant metrics: ${top3.map(x=>`${x.name} (loading ${x.loading.toFixed(2)})`).join('; ')}. ${pc.pc1ExplainedPct>60?'High PC1 dominance — a single latent dimension explains most performance variability under this condition.':'Variance is distributed across multiple latent dimensions — no single metric dominates.'}`
+            };
+        });
 
-            flushList();
-            paragraphLines.push(formatInlineMarkdown(line));
+        // ---- LONGITUDINAL ----
+        // For each key metric, analyze trend over all sessions per test condition
+        tests.forEach(tk => {
+            results.longitudinal[tk] = {};
+            KEY.filter(m=>allMetrics.has(m)).forEach(m=>{
+                const series=getSeriesFor(tk,m);
+                const pairs=[];
+                series.forEach((v,idx)=>{ if(v!==undefined)pairs.push([idx,v]); });
+                if(pairs.length<3) return;
+                const xs=pairs.map(p=>p[0]), ys=pairs.map(p=>p[1]);
+                const reg=linReg(xs,ys), pS=permPSlope(xs,ys,300);
+                const dir=RADAR_KEY_METRICS[m];
+                const comment=trendComment(reg?.slope, reg?.r2, pS, m, dir);
+                // monotonic check
+                let mono=true;
+                for(let i=1;i<ys.length;i++){if((reg?.slope>0&&ys[i]<ys[i-1])||(reg?.slope<0&&ys[i]>ys[i-1])){mono=false;break;}}
+                results.longitudinal[tk][m]={ slope:reg?.slope, r2:reg?.r2, p:pS, monotonic:mono, comment };
+            });
+        });
+
+        return results;
+    }
+
+    // ---- Render diagnostics ----
+    function renderDiagnostics(diag) {
+        const tests = sortTestConditions(Object.keys(diag.descriptive));
+
+        function badge(text, cls) { return `<span class="stat-badge ${cls}">${escapeHtml(String(text))}</span>`; }
+        function verdict(sig, label) { return sig ? `<span class="verdict verdict-reject">REJECT H₀</span>` : `<span class="verdict verdict-fail">FAIL TO REJECT</span>`; }
+        function row(label, value, commentary='') {
+            return `<div class="stat-row">
+                <span class="stat-label">${label}</span>
+                <span class="stat-value">${value}</span>
+                ${commentary ? `<span class="stat-commentary">${commentary}</span>` : ''}
+            </div>`;
+        }
+        function section(title, id, body, open=true) {
+            return `<div class="stat-section">
+                <div class="stat-section-header acc-toggle ${open?'acc-open':''}" data-target="${id}">
+                    ${title}
+                    <span class="acc-arrow">▼</span>
+                </div>
+                <div id="${id}" class="stat-section-body" style="${open?'':'display:none'}">
+                    ${body}
+                </div>
+            </div>`;
         }
 
-        flushParagraph();
-        flushList();
+        let html = '';
 
-        return htmlParts.join('') || `<p>${escapeHtml(markdown || '')}</p>`;
+        if(activeStatTab === 'descriptive') {
+            html = '<div>';
+            tests.forEach((tk,ti) => {
+                const tdata = diag.descriptive[tk];
+                if(!tdata||!Object.keys(tdata).length) return;
+                let body = '';
+                Object.keys(tdata).forEach(m => {
+                    const d = tdata[m];
+                    if(!d) return;
+                    const cvBadge = d.cv!==undefined ? (d.cv>25 ? badge(`CV ${d.cv.toFixed(1)}%`,'badge-bad') : d.cv>12 ? badge(`CV ${d.cv.toFixed(1)}%`,'badge-warn') : badge(`CV ${d.cv.toFixed(1)}%`,'badge-good')) : '';
+                    body += `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border2);">
+                        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:5px;display:flex;align-items:center;gap:6px;">${escapeHtml(m)} ${cvBadge}</div>
+                        ${row('n', d.n)}
+                        ${row('mean ± SD', d.mean!==undefined?`${d.mean.toFixed(3)} ± ${d.sd!==undefined?d.sd.toFixed(3):'—'}`:'-', d.comment)}
+                        ${row('median', d.median!==undefined?d.median.toFixed(3):'-')}
+                        ${row('range', d.min!==undefined?`[${d.min.toFixed(3)}, ${d.max.toFixed(3)}]`:'-')}
+                        ${row('IQR', d.iqr!==undefined?d.iqr.toFixed(3):'-')}
+                        ${d.skew!==undefined ? row('skewness', d.skew.toFixed(3), Math.abs(d.skew)>1?'Substantial skew — distribution asymmetric':Math.abs(d.skew)>0.5?'Mild skew':'Approximately symmetric') : ''}
+                    </div>`;
+                });
+                html += section(`📊 ${tk} — Descriptive Statistics`, `desc-${ti}`, body, ti===0);
+            });
+            html += '</div>';
+
+        } else if(activeStatTab === 'inferential') {
+            html = '<div>';
+            tests.forEach((tk,ti) => {
+                const tdata = diag.inferential[tk];
+                if(!tdata||!Object.keys(tdata).length) return;
+                let body = '';
+                Object.keys(tdata).forEach(m => {
+                    const d = tdata[m];
+                    body += `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border2);">
+                        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:5px;">${escapeHtml(m)}</div>`;
+                    if(d.cohenDComment) body += row('Effect size', d.cohenD!==undefined?d.cohenD.toFixed(3):'N/A', d.cohenDComment);
+                    if(d.earlyLateComment) {
+                        const pSig = d.earlyLateP!==undefined&&d.earlyLateP<0.05;
+                        body += row('Early vs Late', `${verdict(pSig)} ${d.earlyLateDiff!==undefined?(d.earlyLateDiff>0?'+':'')+d.earlyLateDiff.toFixed(3):''}`, d.earlyLateComment);
+                    }
+                    if(d.consistencyComment) body += row('Consistency rank', `${d.consistencyRank}/${d.consistencyRank? Math.round(100/d.consistencyPct*d.consistencyRank):'-'}`, d.consistencyComment);
+                    body += '</div>';
+                });
+                if(!body) body = '<p style="font-size:11px;color:var(--text3);">Need ≥3 sessions for full inferential stats.</p>';
+                html += section(`🔬 ${tk} — Inferential`, `inf-${ti}`, body, ti===0);
+            });
+            html += '</div>';
+
+        } else if(activeStatTab === 'correlation') {
+            html = '<div>';
+            tests.forEach((tk,ti) => {
+                const corrs = diag.correlation[tk];
+                if(!corrs||!corrs.length) {
+                    html += section(`🔗 ${tk} — Correlations`, `corr-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 sessions with paired data.</p>', ti===0);
+                    return;
+                }
+                let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">
+                    <thead><tr>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Pair</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">r</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">ρ</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">p(perm)</th>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Interpretation</th>
+                    </tr></thead><tbody>`;
+                corrs.forEach(c => {
+                    const sig=c.p!==undefined&&c.p<0.05;
+                    const rCol=Math.abs(c.r)>0.6?'color:var(--green)':Math.abs(c.r)>0.3?'color:var(--yellow)':'color:var(--text2)';
+                    body += `<tr style="border-bottom:1px solid var(--border2);">
+                        <td style="padding:5px 8px;color:var(--text);">${escapeHtml(c.m1)}<br><span style="color:var(--text3);">vs ${escapeHtml(c.m2)}</span></td>
+                        <td style="padding:5px 8px;text-align:center;${rCol}">${c.r!==undefined?c.r.toFixed(3):'—'}</td>
+                        <td style="padding:5px 8px;text-align:center;color:var(--text2)">${c.rho!==undefined?c.rho.toFixed(3):'—'}</td>
+                        <td style="padding:5px 8px;text-align:center;">${c.p!==undefined?`<span style="color:${sig?'var(--red)':'var(--text3)'}">${c.p.toFixed(3)}</span>`:'-'}</td>
+                        <td style="padding:5px 8px;color:var(--text2);font-size:10.5px;line-height:1.4;">${escapeHtml(c.comment)}</td>
+                    </tr>`;
+                });
+                body += '</tbody></table>';
+                html += section(`🔗 ${tk} — Pairwise Correlations`, `corr-${ti}`, body, ti===0);
+            });
+            html += '</div>';
+
+        } else if(activeStatTab === 'regression') {
+            html = '<div>';
+            tests.forEach((tk,ti) => {
+                const regs = diag.regression[tk];
+                if(!regs||!regs.length) {
+                    html += section(`📈 ${tk} — Regression`, `reg-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 sessions.</p>', ti===0);
+                    return;
+                }
+                let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">
+                    <thead><tr>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Metric</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Slope</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">R²</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">p</th>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Direction</th>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Commentary</th>
+                    </tr></thead><tbody>`;
+                regs.forEach(r => {
+                    const sig=r.p!==undefined&&r.p<0.05;
+                    const fav=r.favorable===true?'✓ Favorable':r.favorable===false?'✗ Unfavorable':'—';
+                    const favCol=r.favorable===true?'color:var(--green)':r.favorable===false?'color:var(--red)':'color:var(--text3)';
+                    body += `<tr style="border-bottom:1px solid var(--border2);">
+                        <td style="padding:5px 8px;color:var(--text);">${escapeHtml(r.metric)}</td>
+                        <td style="padding:5px 8px;text-align:center;color:${r.slope>0?'var(--green)':'var(--red)'};">${r.slope!==undefined?(r.slope>0?'+':'')+r.slope.toFixed(4):'—'}</td>
+                        <td style="padding:5px 8px;text-align:center;color:${r.r2>0.5?'var(--accent)':'var(--text2)'};">${r.r2!==undefined?r.r2.toFixed(3):'—'}</td>
+                        <td style="padding:5px 8px;text-align:center;">${r.p!==undefined?`<span style="color:${sig?'var(--red)':'var(--text3)'}">${r.p.toFixed(3)}</span>`:'-'}</td>
+                        <td style="padding:5px 8px;${favCol}">${fav}</td>
+                        <td style="padding:5px 8px;color:var(--text2);font-size:10.5px;line-height:1.4;">${escapeHtml(r.comment)}</td>
+                    </tr>`;
+                });
+                body += '</tbody></table>';
+                html += section(`📈 ${tk} — Regression (metric ~ session)`, `reg-${ti}`, body, ti===0);
+            });
+            html += '</div>';
+
+        } else if(activeStatTab === 'multivariate') {
+            html = '<div>';
+            tests.forEach((tk,ti) => {
+                const pcd = diag.multivariate[tk];
+                if(!pcd) {
+                    html += section(`🔺 ${tk} — PCA`, `mv-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 key metrics and ≥2 sessions.</p>', ti===0);
+                    return;
+                }
+                let body = `<div style="margin-bottom:10px;">
+                    ${row('PC1 variance', `${pcd.pc1Pct.toFixed(1)}%`, pcd.comment)}
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">
+                    <thead><tr>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Metric</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">PC1 Loading</th>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Dominance</th>
+                    </tr></thead><tbody>`;
+                pcd.top.forEach((ld,i) => {
+                    const mag=Math.abs(ld.loading);
+                    body += `<tr style="border-bottom:1px solid var(--border2);">
+                        <td style="padding:5px 8px;color:var(--text);">${escapeHtml(ld.name)}</td>
+                        <td style="padding:5px 8px;text-align:center;color:${ld.loading>0?'var(--green)':'var(--red)'};">${ld.loading.toFixed(3)}</td>
+                        <td style="padding:5px 8px;color:var(--text2);font-size:10.5px;">${mag>0.5?'★ Primary driver':mag>0.3?'Secondary influence':'Minor contribution'}</td>
+                    </tr>`;
+                });
+                body += '</tbody></table>';
+                html += section(`🔺 ${tk} — Principal Component Analysis`, `mv-${ti}`, body, ti===0);
+            });
+            html += '</div>';
+
+        } else if(activeStatTab === 'longitudinal') {
+            html = '<div>';
+            tests.forEach((tk,ti) => {
+                const ldata = diag.longitudinal[tk];
+                if(!ldata||!Object.keys(ldata).length) {
+                    html += section(`📉 ${tk} — Longitudinal`, `lng-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 sessions.</p>', ti===0);
+                    return;
+                }
+                let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">
+                    <thead><tr>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Metric</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Slope/session</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">R²</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">p(perm)</th>
+                        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Monotonic</th>
+                        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Commentary</th>
+                    </tr></thead><tbody>`;
+                Object.keys(ldata).forEach(m => {
+                    const d = ldata[m];
+                    const sig=d.p!==undefined&&d.p<0.05;
+                    const dir=RADAR_KEY_METRICS[m];
+                    const favorable=dir==='high'?d.slope>0:dir==='low'?d.slope<0:null;
+                    body += `<tr style="border-bottom:1px solid var(--border2);">
+                        <td style="padding:5px 8px;color:var(--text);">${escapeHtml(m)}</td>
+                        <td style="padding:5px 8px;text-align:center;color:${favorable===true?'var(--green)':favorable===false?'var(--red)':'var(--text2)'};">${d.slope!==undefined?(d.slope>0?'+':'')+d.slope.toFixed(4):'—'}</td>
+                        <td style="padding:5px 8px;text-align:center;color:${d.r2>0.5?'var(--accent)':'var(--text2)'};">${d.r2!==undefined?d.r2.toFixed(3):'—'}</td>
+                        <td style="padding:5px 8px;text-align:center;">${d.p!==undefined?`<span style="color:${sig?'var(--red)':'var(--text3)'}">${d.p.toFixed(3)}</span>`:'-'}</td>
+                        <td style="padding:5px 8px;text-align:center;color:${d.monotonic?'var(--green)':'var(--yellow)'};">${d.monotonic?'Yes':'No'}</td>
+                        <td style="padding:5px 8px;color:var(--text2);font-size:10.5px;line-height:1.4;">${escapeHtml(d.comment)}</td>
+                    </tr>`;
+                });
+                body += '</tbody></table>';
+                html += section(`📉 ${tk} — Longitudinal Trends`, `lng-${ti}`, body, ti===0);
+            });
+            html += '</div>';
+        }
+
+        statsContent.innerHTML = html;
+
+        // Wire accordion toggles
+        statsContent.querySelectorAll('.acc-toggle').forEach(header => {
+            header.addEventListener('click', () => {
+                const target = document.getElementById(header.dataset.target);
+                if(!target) return;
+                const isOpen = target.style.display !== 'none';
+                target.style.display = isOpen ? 'none' : 'block';
+                header.classList.toggle('acc-open', !isOpen);
+            });
+        });
     }
 
-    function setInterpretationStatus(message) {
-        interpretationOutput.textContent = message;
-    }
+    // ---- Stat tab wiring ----
+    document.getElementById('stat-tabs').addEventListener('click', e => {
+        const tab = e.target.closest('.stat-tab');
+        if(!tab) return;
+        document.querySelectorAll('.stat-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeStatTab = tab.dataset.tab;
+        // re-render if diagnostics already computed
+        const existingData = statsContent.dataset.computed;
+        if(existingData) {
+            try { renderDiagnostics(JSON.parse(existingData)); } catch(e2){}
+        }
+    });
 
-    function setInterpretationResult(message) {
-        interpretationOutput.innerHTML = renderInterpretationMarkdown(message);
-    }
+    runStatsBtn.addEventListener('click', () => {
+        const icon = document.getElementById('stats-icon');
+        const spin = document.getElementById('stats-loading');
+        runStatsBtn.disabled = true;
+        icon.classList.add('hidden');
+        spin.classList.remove('hidden');
 
-    // Upload events
+        setTimeout(() => {
+            try {
+                const diag = computeAllDiagnostics();
+                statsContent.dataset.computed = JSON.stringify(diag);
+                renderDiagnostics(diag);
+            } catch(err) {
+                statsContent.innerHTML = `<p style="color:var(--red);font-size:12px;">Error computing diagnostics: ${escapeHtml(err.message)}</p>`;
+                console.error(err);
+            } finally {
+                runStatsBtn.disabled = false;
+                icon.classList.remove('hidden');
+                spin.classList.add('hidden');
+            }
+        }, 30);
+    });
+
+    // ---- Upload ----
     fileUploadArea.addEventListener('click', () => fileInput.click());
     fileUploadArea.addEventListener('dragover', e => { e.preventDefault(); fileUploadArea.classList.add('dragover'); });
     fileUploadArea.addEventListener('dragleave', () => fileUploadArea.classList.remove('dragover'));
@@ -322,845 +1115,644 @@
     fileInput.addEventListener('change', () => handleFiles(fileInput.files));
 
     resetButton.addEventListener('click', () => {
-        allParsedData = []; allMetrics = new Set(); allTestConditions = new Set();
-        currentView = 'metric'; analysisModeSelect.value = 'metric';
-        fileInput.value = ''; fileList.innerHTML = '';
+        uploadedParsedData=[]; allParsedData=[]; allMetrics=new Set(); allTestConditions=new Set();
+        pointAnnotations={}; currentView='metric'; analysisModeSelect.value='metric';
+        fileInput.value=''; fileList.innerHTML='';
         controlsSection.classList.add('hidden');
-        metricControls.classList.remove('hidden');
-        radarControls.classList.add('hidden');
-        copControls.classList.add('hidden');
-        resultsSection.classList.add('hidden');
-        placeholder.classList.remove('hidden');
-        loading.classList.add('hidden');
-        resetButton.classList.add('hidden');
-        setInterpretationStatus('Click a button to generate an AI-powered clinical interpretation.');
-        if (resultsChart) { resultsChart.destroy(); resultsChart = null; }
+        metricControls.classList.remove('hidden'); radarControls.classList.add('hidden'); copControls.classList.add('hidden');
+        resultsSection.classList.add('hidden'); placeholder.classList.remove('hidden'); loading.classList.add('hidden');
+        fileListHelper.classList.add('hidden'); fileActionButtons.style.display='none';
+        interpretationOutput.textContent='Click a button to generate an AI-powered clinical interpretation.';
+        statsContent.dataset.computed='';
+        statsContent.innerHTML='<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the current view.</p>';
+        if(resultsChart){resultsChart.destroy();resultsChart=null;}
         populateRadarMetricSelector();
     });
+    processFilesButton.addEventListener('click', processSelectedFiles);
 
     analysisModeSelect.addEventListener('change', e => {
-        currentView = e.target.value;
-        metricControls.classList.toggle('hidden', currentView !== 'metric');
-        radarControls.classList.toggle('hidden', currentView !== 'radar');
-        copControls.classList.toggle('hidden', currentView !== 'cop');
-        radarDisclaimer.classList.toggle('hidden', currentView !== 'radar');
+        currentView=e.target.value;
+        metricControls.classList.toggle('hidden', currentView!=='metric');
+        radarControls.classList.toggle('hidden', currentView!=='radar');
+        copControls.classList.toggle('hidden', currentView!=='cop');
+        radarDisclaimer.classList.toggle('hidden', currentView!=='radar');
+        document.getElementById('line-chart-hint')?.classList.toggle('hidden', currentView!=='metric');
         displayResults();
     });
-
     metricSelect.addEventListener('change', displayResults);
     testSelect.addEventListener('change', displayResults);
     copTestSelect.addEventListener('change', displayResults);
 
-    // ---- File handler ----
-    async function handleFiles(files) {
-        if (files.length === 0) return;
-        placeholder.classList.add('hidden');
-        loading.classList.remove('hidden');
-        resultsSection.classList.add('hidden');
-        allParsedData = []; allMetrics = new Set(); allTestConditions = new Set();
-        fileList.innerHTML = '';
+    function updateFileActionButtonsState() {
+        const sel=uploadedParsedData.filter(d=>d.selected!==false).length;
+        processFilesButton.disabled=sel===0;
+        processFilesButton.style.opacity=sel===0?'0.4':'1';
+        processFilesButton.textContent=sel>0?`Process (${sel})`:'Process';
+    }
 
-        const fileArray = Array.from(files);
-        const filePromises = fileArray.map(file => readFileAsPDF(file).then(buf => parsePDFData(buf, file.name)));
-
-        try {
-            const parsedResults = await Promise.all(filePromises);
-            parsedResults.forEach(parsed => {
-                if (parsed) {
-                    allParsedData.push(parsed);
-                    Object.keys(parsed.tests).forEach(testKey => {
-                        allTestConditions.add(testKey);
-                        Object.keys(parsed.tests[testKey].metrics).forEach(m => allMetrics.add(m));
-                    });
-                }
+    function rebuildAnalysisStateFromSelection() {
+        allParsedData=uploadedParsedData.filter(d=>d.selected!==false);
+        allMetrics=new Set(); allTestConditions=new Set();
+        allParsedData.forEach(p=>{
+            Object.keys(p.tests).forEach(tk=>{
+                allTestConditions.add(tk);
+                Object.keys(p.tests[tk].metrics).forEach(m=>allMetrics.add(m));
             });
+        });
+    }
 
-            if (allParsedData.length > 0) {
-                allParsedData.sort((a, b) => a.date - b.date);
-                buildFileList();
-                populateMetricSelect();
-                populateTestSelect();
-                populateCOPTestSelect();
-                populateRadarMetricSelector();
-                displayResults();
-                resetButton.classList.remove('hidden');
+    function processSelectedFiles() {
+        rebuildAnalysisStateFromSelection();
+        if(!allParsedData.length){
+            controlsSection.classList.add('hidden'); resultsSection.classList.add('hidden'); placeholder.classList.remove('hidden');
+            return;
+        }
+        populateMetricSelect(); populateTestSelect(); populateCOPTestSelect(); populateRadarMetricSelector();
+        displayResults();
+    }
+
+    async function handleFiles(files) {
+        if(!files.length) return;
+        placeholder.classList.add('hidden'); loading.classList.remove('hidden');
+        resultsSection.classList.add('hidden'); uploadedParsedData=[]; allParsedData=[]; allMetrics=new Set(); allTestConditions=new Set();
+        fileList.innerHTML='';
+        const fileArray=Array.from(files);
+        try {
+            const results=await Promise.all(fileArray.map(f=>readFileAsPDF(f).then(buf=>parsePDFData(buf,f.name))));
+            results.forEach(p=>{if(p){p.selected=true;p.label=p.fileName.replace(/\.pdf$/i,'');uploadedParsedData.push(p);}});
+            if(uploadedParsedData.length>0){
+                uploadedParsedData.sort((a,b)=>a.date-b.date);
+                buildFileList(); fileListHelper.classList.remove('hidden');
+                fileActionButtons.style.display='flex'; updateFileActionButtonsState();
             } else {
                 placeholder.classList.remove('hidden');
-                fileList.innerHTML = '<p class="text-red-500 text-sm">No valid posturography data found in files.</p>';
+                fileList.innerHTML='<p style="font-size:12px;color:var(--red);">No valid posturography data found.</p>';
             }
-        } catch (error) {
-            console.error('Error reading files:', error);
-            fileList.innerHTML = `<p class="text-red-500 text-sm">Error: ${error.message}</p>`;
+        } catch(err) {
+            console.error(err);
+            fileList.innerHTML=`<p style="font-size:12px;color:var(--red);">Error: ${err.message}</p>`;
             placeholder.classList.remove('hidden');
-        } finally {
-            loading.classList.add('hidden');
-        }
+        } finally { loading.classList.add('hidden'); }
     }
 
     function buildFileList() {
-        fileList.innerHTML = '';
-        allParsedData.forEach((d, i) => {
-            d.label = d.fileName.replace(/\.pdf$/i, '');
-            const color = CHART_COLORS[i % CHART_COLORS.length].solid;
-            const div = document.createElement('div');
-            div.className = 'bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-1.5';
-            div.innerHTML = `
-                <div class="flex justify-between items-center">
-                    <span class="text-xs text-gray-400 truncate max-w-[180px]">${d.fileName}</span>
-                    <span class="text-xs text-gray-400">${d.date instanceof Date && !isNaN(d.date) ? d.date.toLocaleDateString() : ''}</span>
+        fileList.innerHTML='';
+        uploadedParsedData.forEach((d,i)=>{
+            const color=CHART_COLORS[i%CHART_COLORS.length].solid;
+            const card=document.createElement('div');
+            card.className=`file-card rounded-lg ${d.selected!==false?'selected':''}`;
+            card.style.cssText='padding:10px;border-radius:8px;';
+            card.draggable=true; card.dataset.index=String(i);
+            card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+                    <span style="cursor:grab;color:var(--text3);font-size:13px;" title="Drag to reorder">⋮⋮</span>
+                    <span style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;">${escapeHtml(d.fileName)}</span>
                 </div>
-                <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${color}"></div>
-                    <input type="text" value="${d.label}" data-index="${i}"
-                        class="session-label-input flex-1 text-sm font-medium text-gray-800 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-                        placeholder="Session label">
-                </div>`;
-            fileList.appendChild(div);
+                <span style="font-size:10px;color:var(--text3);">${d.date instanceof Date&&!isNaN(d.date)?d.date.toLocaleDateString():''}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" ${d.selected!==false?'checked':''} data-index="${i}" class="session-select-checkbox">
+                <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+                <input type="text" value="${escapeHtml(d.label)}" data-index="${i}" class="session-label-input" style="flex:1;font-size:12px;font-weight:500;" placeholder="Session label">
+                <div style="display:flex;flex-direction:column;gap:2px;margin-left:4px;">
+                    <button type="button" data-index="${i}" ${i===0?'disabled':''} class="session-move-up reorder-button">
+                        <svg style="width:10px;height:10px;" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 4a1 1 0 01.707.293l4 4a1 1 0 11-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707A1 1 0 115.293 8.293l4-4A1 1 0 0110 4z" clip-rule="evenodd"/></svg>
+                    </button>
+                    <button type="button" data-index="${i}" ${i===uploadedParsedData.length-1?'disabled':''} class="session-move-down reorder-button">
+                        <svg style="width:10px;height:10px;" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 16a1 1 0 01-.707-.293l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 112 0v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4A1 1 0 0110 16z" clip-rule="evenodd"/></svg>
+                    </button>
+                </div>
+            </div>`;
+            fileList.appendChild(card);
         });
-        fileList.querySelectorAll('.session-label-input').forEach(input => {
-            input.addEventListener('input', e => {
-                allParsedData[parseInt(e.target.dataset.index)].label = e.target.value;
-                displayResults();
+        updateFileActionButtonsState();
+
+        fileList.querySelectorAll('.session-label-input').forEach(inp=>{
+            inp.addEventListener('input',e=>{const idx=parseInt(e.target.dataset.index);uploadedParsedData[idx].label=e.target.value;if(!resultsSection.classList.contains('hidden'))displayResults();});
+        });
+        fileList.querySelectorAll('.session-select-checkbox').forEach(inp=>{
+            inp.addEventListener('change',e=>{const idx=parseInt(e.target.dataset.index);uploadedParsedData[idx].selected=e.target.checked;buildFileList();});
+        });
+        fileList.querySelectorAll('.session-move-up').forEach(btn=>{
+            btn.addEventListener('click',e=>{const idx=parseInt(e.currentTarget.dataset.index);if(idx<=0)return;[uploadedParsedData[idx-1],uploadedParsedData[idx]]=[uploadedParsedData[idx],uploadedParsedData[idx-1]];buildFileList();});
+        });
+        fileList.querySelectorAll('.session-move-down').forEach(btn=>{
+            btn.addEventListener('click',e=>{const idx=parseInt(e.currentTarget.dataset.index);if(idx>=uploadedParsedData.length-1)return;[uploadedParsedData[idx],uploadedParsedData[idx+1]]=[uploadedParsedData[idx+1],uploadedParsedData[idx]];buildFileList();});
+        });
+
+        // drag & drop reorder
+        let dragIdx=null;
+        fileList.querySelectorAll('.file-card').forEach(card=>{
+            card.addEventListener('dragstart',e=>{dragIdx=parseInt(card.dataset.index);card.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+            card.addEventListener('dragend',()=>{dragIdx=null;fileList.querySelectorAll('.file-card').forEach(c=>c.classList.remove('dragging','drag-over'));});
+            card.addEventListener('dragover',e=>{e.preventDefault();if(dragIdx===null)return;card.classList.add('drag-over');});
+            card.addEventListener('dragleave',()=>card.classList.remove('drag-over'));
+            card.addEventListener('drop',e=>{
+                e.preventDefault();card.classList.remove('drag-over');
+                const tIdx=parseInt(card.dataset.index);
+                if(dragIdx===null||tIdx===dragIdx)return;
+                const [m]=uploadedParsedData.splice(dragIdx,1);
+                uploadedParsedData.splice(dragIdx<tIdx?tIdx-1:tIdx,0,m);
+                buildFileList();
             });
         });
     }
 
-    function readFileAsPDF(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsArrayBuffer(file);
-        });
-    }
+    function readFileAsPDF(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsArrayBuffer(file);});}
 
     // ---- PDF Parsing ----
-    async function parsePDFData(arrayBuffer, fileName) {
-        const data = { fileName, date: new Date(), tests: {} };
-        let dateSet = false;
+    async function parsePDFData(ab, fileName) {
+        const data={fileName,date:new Date(),tests:{}}; let dateSet=false;
         try {
-            const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-            for (let pageNum = 2; pageNum <= pdf.numPages - 1; pageNum++) {
-                const page = await pdf.getPage(pageNum);
-                const text = await extractPageText(page);
-                console.log(`[PDF] ${fileName} p${pageNum}:\n${text.substring(0, 600)}\n---`);
-                const testData = parseTestFromText(text);
-                if (testData) {
-                    data.tests[testData.key] = { fullName: testData.fullName, metrics: testData.metrics };
-                    if (!dateSet) { data.date = testData.date; dateSet = true; }
-                }
+            const pdf=await pdfjsLib.getDocument({data:new Uint8Array(ab)}).promise;
+            for(let pn=2;pn<=pdf.numPages-1;pn++){
+                const page=await pdf.getPage(pn);
+                const text=await extractPageText(page);
+                const td=parseTestFromText(text);
+                if(td){data.tests[td.key]={fullName:td.fullName,metrics:td.metrics};if(!dateSet){data.date=td.date;dateSet=true;}}
             }
-        } catch (e) {
-            console.error('PDF parse error:', e);
-            return null;
-        }
-        if (Object.keys(data.tests).length === 0) return null;
+        } catch(e){console.error(e);return null;}
+        if(!Object.keys(data.tests).length)return null;
         return data;
     }
 
     async function extractPageText(page) {
-        const textContent = await page.getTextContent();
-        const items = textContent.items.filter(item => item.str && item.str.trim().length > 0);
-        if (items.length === 0) return '';
-        const LINE_THRESHOLD = 5;
-        const sorted = [...items].sort((a, b) => {
-            const yDiff = b.transform[5] - a.transform[5];
-            if (Math.abs(yDiff) > LINE_THRESHOLD) return yDiff;
-            return a.transform[4] - b.transform[4];
-        });
-        let result = '', lastY = null;
-        for (const item of sorted) {
-            const y = item.transform[5], str = item.str.trim();
-            if (!str) continue;
-            if (lastY !== null && Math.abs(y - lastY) > LINE_THRESHOLD) result += '\n';
-            else if (result.length > 0 && !result.endsWith('\n') && !result.endsWith(' ')) result += ' ';
-            result += str;
-            lastY = y;
+        const tc=await page.getTextContent();
+        const items=tc.items.filter(i=>i.str&&i.str.trim());
+        if(!items.length)return '';
+        const TH=5;
+        const sorted=[...items].sort((a,b)=>{const yd=b.transform[5]-a.transform[5];return Math.abs(yd)>TH?yd:a.transform[4]-b.transform[4];});
+        let res='',lastY=null;
+        for(const item of sorted){
+            const y=item.transform[5],s=item.str.trim();
+            if(!s)continue;
+            if(lastY!==null&&Math.abs(y-lastY)>TH)res+='\n';
+            else if(res.length>0&&!res.endsWith('\n')&&!res.endsWith(' '))res+=' ';
+            res+=s;lastY=y;
         }
-        return result;
+        return res;
     }
 
-    function parseTestFromText(text) {
-        let testKey, testName;
-        const variantMatch = text.match(/Foam[\s\S]{0,5}Eyes[\s\S]{0,5}Closed[\s\S]{0,5}(Rt|Lt|Flx|Ext)\b/i);
-        if (variantMatch) {
-            testKey = `PSEC ${variantMatch[1]}`; testName = `Foam Eyes Closed ${variantMatch[1]}`;
-        } else if (/Normal[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Open\b/i.test(text)) {
-            testKey = 'NSEO'; testName = 'Normal Stability Eyes Open';
-        } else if (/Normal[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Closed\b/i.test(text)) {
-            testKey = 'NSEC'; testName = 'Normal Stability Eyes Closed';
-        } else if (/Perturbed[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Open\b/i.test(text)) {
-            testKey = 'PSEO'; testName = 'Perturbed Stability Eyes Open';
-        } else if (/Perturbed[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Closed\b/i.test(text)) {
-            testKey = 'PSEC'; testName = 'Perturbed Stability Eyes Closed';
-        } else {
-            console.warn('[PDF] Could not identify test. Snippet:', text.substring(0, 300));
-            return null;
-        }
+    function parseTestFromText(text){
+        let testKey,testName;
+        const vm=text.match(/Foam[\s\S]{0,5}Eyes[\s\S]{0,5}Closed[\s\S]{0,5}(Rt|Lt|Flx|Ext)\b/i);
+        if(vm){testKey=`PSEC ${vm[1]}`;testName=`Foam Eyes Closed ${vm[1]}`;}
+        else if(/Normal[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Open\b/i.test(text)){testKey='NSEO';testName='Normal Stability Eyes Open';}
+        else if(/Normal[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Closed\b/i.test(text)){testKey='NSEC';testName='Normal Stability Eyes Closed';}
+        else if(/Perturbed[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Open\b/i.test(text)){testKey='PSEO';testName='Perturbed Stability Eyes Open';}
+        else if(/Perturbed[\s\S]{0,5}Stability[\s\S]{0,5}Eyes[\s\S]{0,5}Closed\b/i.test(text)){testKey='PSEC';testName='Perturbed Stability Eyes Closed';}
+        else return null;
 
-        const dateMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
-        const testDate = dateMatch ? new Date(dateMatch[1]) : new Date();
-        const metrics = {};
-        const pf = s => { const v = parseFloat(s); return isNaN(v) ? undefined : v; };
+        const dm=text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+        const testDate=dm?new Date(dm[1]):new Date();
+        const metrics={};
+        const pf=s=>{const v=parseFloat(s);return isNaN(v)?undefined:v;};
 
-        const ssM = text.match(/Stability Score\s+([\d.]+)\s*%/);
-        if (ssM) metrics['Stability Score'] = pf(ssM[1]);
-
-        const scM = text.match(/Stability Class\s+(Healthy Balance|Mildly Reduced|Moderately Reduced|Severely Reduced|Profoundly Reduced)/i);
-        if (scM) metrics['Stability Class'] = scM[1];
-
-        const splM = text.match(/Sway Path Length\s+([\d.]+)\s*m(?!\s*\/)/);
-        if (splM) metrics['Sway Path Length'] = pf(splM[1]);
-
-        const areaM = text.match(/Area 95%\s*Conf\.?\s*Ellipse\s+([\d.]+)/);
-        if (areaM) metrics['Area 95% Conf. Ellipse'] = pf(areaM[1]);
-
-        const velM = text.match(/Sway Velocity:\s*Max\s*&\s*Ave\s+([\d.]+)\s*m\/s\s*&\s*([\d.]+)\s*m\/s/);
-        if (velM) { metrics['Sway Velocity (Max)'] = pf(velM[1]); metrics['Sway Velocity (Ave)'] = pf(velM[2]); }
-
-        const accM = text.match(/Sway Acceler\.:\s*Max\s*&\s*Ave\s+([\d.]+)[^&]*&\s*([\d.]+)/);
-        if (accM) { metrics['Sway Acceler. (Max)'] = pf(accM[1]); metrics['Sway Acceler. (Ave)'] = pf(accM[2]); }
-
-        const asM = text.match(/Actual Sway:\s*Max\s*&\s*Ave\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
-        if (asM) { metrics['Actual Sway (Max)'] = pf(asM[1]); metrics['Actual Sway (Ave)'] = pf(asM[2]); }
-
-        const mlM = text.match(/ML Sway:\s*Max\s*&\s*95%\s*Conf\.\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
-        if (mlM) { metrics['ML Sway (Max)'] = pf(mlM[1]); metrics['ML Sway (95%)'] = pf(mlM[2]); }
-
-        const apM = text.match(/AP Sway:\s*Max\s*&\s*95%\s*Conf\.\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
-        if (apM) { metrics['AP Sway (Max)'] = pf(apM[1]); metrics['AP Sway (95%)'] = pf(apM[2]); }
-
-        const csM = text.match(/95%\s*Conf\.?\s*Sway:\s*Max\s*&\s*Min\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);
-        if (csM) { metrics['95% Conf. Sway (Max)'] = pf(csM[1]); metrics['95% Conf. Sway (Min)'] = pf(csM[2]); }
-
-        const scXY = text.match(/Sway Center\s*\[Xo,?\s*Yo\]\s*\[?\s*(-?[\d.]+)\s*m,\s*(-?[\d.]+)\s*m\s*\]?/);
-        if (scXY) { metrics['Sway Center Xo'] = pf(scXY[1]); metrics['Sway Center Yo'] = pf(scXY[2]); }
-
-        const frM = text.match(/Fatigue Ratio\s+([\d.]+)\s*%/);
-        if (frM) metrics['Fatigue Ratio'] = pf(frM[1]);
-
-        const arM = text.match(/Adaptation Ratio\s+([\d.]+)\s*%/);
-        if (arM) metrics['Adaptation Ratio'] = pf(arM[1]);
-
-        const dirM = text.match(/Directionality\s+(\d+)\s*%/);
-        if (dirM) metrics['Directionality'] = pf(dirM[1]);
-
-        const pdM = text.match(/Pred\.?\s*Direction of Sway\s+(-?[\d.]+)\s*deg/);
-        if (pdM) metrics['Pred. Direction of Sway'] = pf(pdM[1]);
-
-        const ppM = text.match(/Parameter\s+p\s+([\d.]+)/);
-        if (ppM) metrics['Parameter p'] = pf(ppM[1]);
-
-        if (/Unable to Complete/i.test(text)) metrics['Test Status'] = 'Unable to Complete';
-        else if (/\bCompleted\b/i.test(text)) metrics['Test Status'] = 'Completed';
-
-        return { key: testKey, fullName: testName, date: testDate, metrics };
+        const ssM=text.match(/Stability Score\s+([\d.]+)\s*%/);if(ssM)metrics['Stability Score']=pf(ssM[1]);
+        const scM=text.match(/Stability Class\s+(Healthy Balance|Mildly Reduced|Moderately Reduced|Severely Reduced|Profoundly Reduced)/i);if(scM)metrics['Stability Class']=scM[1];
+        const splM=text.match(/Sway Path Length\s+([\d.]+)\s*m(?!\s*\/)/);if(splM)metrics['Sway Path Length']=pf(splM[1]);
+        const areaM=text.match(/Area 95%\s*Conf\.?\s*Ellipse\s+([\d.]+)/);if(areaM)metrics['Area 95% Conf. Ellipse']=pf(areaM[1]);
+        const velM=text.match(/Sway Velocity:\s*Max\s*&\s*Ave\s+([\d.]+)\s*m\/s\s*&\s*([\d.]+)\s*m\/s/);if(velM){metrics['Sway Velocity (Max)']=pf(velM[1]);metrics['Sway Velocity (Ave)']=pf(velM[2]);}
+        const accM=text.match(/Sway Acceler\.:\s*Max\s*&\s*Ave\s+([\d.]+)[^&]*&\s*([\d.]+)/);if(accM){metrics['Sway Acceler. (Max)']=pf(accM[1]);metrics['Sway Acceler. (Ave)']=pf(accM[2]);}
+        const asM=text.match(/Actual Sway:\s*Max\s*&\s*Ave\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);if(asM){metrics['Actual Sway (Max)']=pf(asM[1]);metrics['Actual Sway (Ave)']=pf(asM[2]);}
+        const mlM=text.match(/ML Sway:\s*Max\s*&\s*95%\s*Conf\.\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);if(mlM){metrics['ML Sway (Max)']=pf(mlM[1]);metrics['ML Sway (95%)']=pf(mlM[2]);}
+        const apM=text.match(/AP Sway:\s*Max\s*&\s*95%\s*Conf\.\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);if(apM){metrics['AP Sway (Max)']=pf(apM[1]);metrics['AP Sway (95%)']=pf(apM[2]);}
+        const csM=text.match(/95%\s*Conf\.?\s*Sway:\s*Max\s*&\s*Min\s+([\d.]+)\s*m\s*&\s*([\d.]+)\s*m/);if(csM){metrics['95% Conf. Sway (Max)']=pf(csM[1]);metrics['95% Conf. Sway (Min)']=pf(csM[2]);}
+        const scXY=text.match(/Sway Center\s*\[Xo,?\s*Yo\]\s*\[?\s*(-?[\d.]+)\s*m,\s*(-?[\d.]+)\s*m\s*\]?/);if(scXY){metrics['Sway Center Xo']=pf(scXY[1]);metrics['Sway Center Yo']=pf(scXY[2]);}
+        const frM=text.match(/Fatigue Ratio\s+([\d.]+)\s*%/);if(frM)metrics['Fatigue Ratio']=pf(frM[1]);
+        const arM=text.match(/Adaptation Ratio\s+([\d.]+)\s*%/);if(arM)metrics['Adaptation Ratio']=pf(arM[1]);
+        const dirM=text.match(/Directionality\s+(\d+)\s*%/);if(dirM)metrics['Directionality']=pf(dirM[1]);
+        const pdM=text.match(/Pred\.?\s*Direction of Sway\s+(-?[\d.]+)\s*deg/);if(pdM)metrics['Pred. Direction of Sway']=pf(pdM[1]);
+        const ppM=text.match(/Parameter\s+p\s+([\d.]+)/);if(ppM)metrics['Parameter p']=pf(ppM[1]);
+        if(/Unable to Complete/i.test(text))metrics['Test Status']='Unable to Complete';
+        else if(/\bCompleted\b/i.test(text))metrics['Test Status']='Completed';
+        return{key:testKey,fullName:testName,date:testDate,metrics};
     }
 
     // ---- Populate selects ----
-    function populateMetricSelect() {
-        metricSelect.innerHTML = '<option value="">-- Select a Metric --</option>';
-        const sortedMetrics = Array.from(allMetrics).sort();
-        const keyMetrics = ['Stability Score', 'Sway Path Length', 'Sway Velocity (Ave)', 'Area 95% Conf. Ellipse'];
-        keyMetrics.forEach(km => {
-            if (sortedMetrics.includes(km))
-                metricSelect.innerHTML += `<option value="${km}" ${km === 'Stability Score' ? 'selected' : ''}>${km}</option>`;
-        });
-        sortedMetrics.forEach(m => { if (!keyMetrics.includes(m)) metricSelect.innerHTML += `<option value="${m}">${m}</option>`; });
+    function populateMetricSelect(){
+        metricSelect.innerHTML='<option value="">-- Select Metric --</option>';
+        const sorted=Array.from(allMetrics).sort();
+        const key=['Stability Score','Sway Path Length','Sway Velocity (Ave)','Area 95% Conf. Ellipse'];
+        key.forEach(km=>{if(sorted.includes(km))metricSelect.innerHTML+=`<option value="${km}"${km==='Stability Score'?' selected':''}>${km}</option>`;});
+        sorted.forEach(m=>{if(!key.includes(m))metricSelect.innerHTML+=`<option value="${m}">${m}</option>`;});
     }
-
-    function populateTestSelect() {
-        testSelect.innerHTML = '';
-        sortTestConditions(Array.from(allTestConditions)).forEach((t, i) => {
-            testSelect.innerHTML += `<option value="${t}" ${i === 0 ? 'selected' : ''}>${t}</option>`;
-        });
+    function populateTestSelect(){
+        testSelect.innerHTML='';
+        sortTestConditions(Array.from(allTestConditions)).forEach((t,i)=>testSelect.innerHTML+=`<option value="${t}"${i===0?' selected':''}>${t}</option>`);
     }
-
-    function populateCOPTestSelect() {
-        copTestSelect.innerHTML = '<option value="all">All Tests</option>';
-        sortTestConditions(Array.from(allTestConditions)).forEach(t => {
-            copTestSelect.innerHTML += `<option value="${t}">${t}</option>`;
-        });
+    function populateCOPTestSelect(){
+        copTestSelect.innerHTML='<option value="all">All Tests</option>';
+        sortTestConditions(Array.from(allTestConditions)).forEach(t=>copTestSelect.innerHTML+=`<option value="${t}">${t}</option>`);
     }
-
-    function populateRadarMetricSelector() {
-        radarMetricSelector.innerHTML = '';
-        Object.keys(RADAR_KEY_METRICS).forEach(metric => {
-            if (!allMetrics.has(metric)) return;
-            const id = `rm-${metric.replace(/[^a-zA-Z0-9]/g, '-')}`;
-            const div = document.createElement('div');
-            div.className = 'flex items-center gap-2';
-            div.innerHTML = `
-                <input id="${id}" type="checkbox" value="${metric}" class="radar-metric-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" checked>
-                <label for="${id}" class="text-sm font-medium text-gray-700 cursor-pointer">${metric}</label>`;
+    function populateRadarMetricSelector(){
+        radarMetricSelector.innerHTML='';
+        Object.keys(RADAR_KEY_METRICS).forEach(metric=>{
+            if(!allMetrics.has(metric))return;
+            const id=`rm-${metric.replace(/[^a-zA-Z0-9]/g,'-')}`;
+            const div=document.createElement('div');
+            div.style.cssText='display:flex;align-items:center;gap:6px;';
+            div.innerHTML=`<input id="${id}" type="checkbox" value="${metric}" class="radar-metric-checkbox" checked><label for="${id}" style="font-size:12px;color:var(--text2);cursor:pointer;">${metric}</label>`;
             radarMetricSelector.appendChild(div);
         });
-        radarMetricSelector.addEventListener('change', e => {
-            if (e.target.classList.contains('radar-metric-checkbox')) displayResults();
-        });
+        radarMetricSelector.addEventListener('change',e=>{if(e.target.classList.contains('radar-metric-checkbox'))displayResults();});
     }
 
     // ---- Display dispatcher ----
-    function displayResults() {
-        controlsSection.classList.remove('hidden');
-        resultsSection.classList.remove('hidden');
-        placeholder.classList.add('hidden');
-        loading.classList.add('hidden');
+    function displayResults(){
+        controlsSection.classList.remove('hidden'); resultsSection.classList.remove('hidden');
+        placeholder.classList.add('hidden'); loading.classList.add('hidden');
+        const isBE=currentView==='birdsEye';
+        chartContainer.classList.toggle('hidden',isBE); birdsEyeContainer.classList.toggle('hidden',!isBE);
+        exportPngBtn.classList.toggle('hidden',isBE);
+        radarDisclaimer.classList.toggle('hidden',currentView!=='radar');
+        document.getElementById('line-chart-hint')?.classList.toggle('hidden',currentView!=='metric');
 
-        const isBirdsEye = currentView === 'birdsEye';
-        chartContainer.classList.toggle('hidden', isBirdsEye);
-        birdsEyeContainer.classList.toggle('hidden', !isBirdsEye);
-        exportPngBtn.classList.toggle('hidden', isBirdsEye);
-        radarDisclaimer.classList.toggle('hidden', currentView !== 'radar');
-
-        if (currentView === 'metric') {
-            const sel = metricSelect.value;
-            if (!sel) { destroyChart(); summaryTableContainer.innerHTML = '<p class="text-gray-500">Please select a metric.</p>'; return; }
-            const a = analyzeMetricData(sel);
-            updateChart(a); updateTable(a);
-        } else if (currentView === 'radar') {
-            const sel = testSelect.value;
-            if (!sel) { destroyChart(); summaryTableContainer.innerHTML = '<p class="text-gray-500">Please select a test condition.</p>'; return; }
-            const a = analyzeRadarData(sel);
-            updateChart(a); updateTable(a);
-        } else if (currentView === 'birdsEye') {
+        if(currentView==='metric'){
+            const sel=metricSelect.value; if(!sel){destroyChart();summaryTableContainer.innerHTML='<p style="font-size:12px;color:var(--text3);">Select a metric.</p>';return;}
+            const a=analyzeMetricData(sel);updateChart(a);updateTable(a);
+        } else if(currentView==='radar'){
+            const sel=testSelect.value; if(!sel){destroyChart();return;}
+            const a=analyzeRadarData(sel);updateChart(a);updateTable(a);
+        } else if(currentView==='birdsEye'){
             renderBirdsEye();
-        } else if (currentView === 'cop') {
+        } else if(currentView==='cop'){
             renderCOPScatter();
         }
-
-        interpretationOutput.textContent = 'Click a button to generate an AI-powered clinical interpretation.';
-        interpretationButton.disabled = false;
-        document.getElementById('interpret-button-text').textContent = 'Interpret View';
-        document.getElementById('interpret-icon').classList.remove('hidden');
-        document.getElementById('interpret-loading').classList.add('hidden');
+        // Reset stats panel
+        statsContent.dataset.computed='';
+        statsContent.innerHTML='<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the current view.</p>';
+        interpretationOutput.innerHTML='Click a button to generate an AI-powered clinical interpretation.';
+        interpretationButton.disabled=false;
+        document.getElementById('interpret-button-text').textContent='Interpret View';
     }
 
-    function destroyChart() { if (resultsChart) { resultsChart.destroy(); resultsChart = null; } }
+    function destroyChart(){if(resultsChart){resultsChart.destroy();resultsChart=null;}}
 
-    // ---- Metric bar chart analysis ----
-    function analyzeMetricData(metric) {
-        const numFiles = allParsedData.length;
-        const labels = allParsedData.map(d => getLabel(d).length > 25 ? '...' + getLabel(d).slice(-22) : getLabel(d));
-        const commonTests = new Set();
-        allParsedData.forEach(d => Object.keys(d.tests).forEach(k => {
-            if (d.tests[k].metrics[metric] !== undefined) commonTests.add(k);
-        }));
-        const sortedTests = sortTestConditions(Array.from(commonTests));
+    function calcStats(values){const m=values.reduce((a,b)=>a+b,0)/values.length;const sd=Math.sqrt(values.map(x=>(x-m)**2).reduce((a,b)=>a+b,0)/values.length);return{mean:m,stdDev:sd};}
 
-        const tableData = { header: ['Metric', 'Test', ...labels], rows: [] };
-        if (numFiles === 2) { tableData.header.push('Change', '% Change'); }
-        else if (numFiles > 2) { tableData.header.push('Mean', 'Std Dev'); }
+    function analyzeMetricData(metric){
+        const nf=allParsedData.length;
+        const labels=allParsedData.map(d=>getLabel(d).length>22?'…'+getLabel(d).slice(-19):getLabel(d));
+        const commonTests=new Set();
+        allParsedData.forEach(d=>Object.keys(d.tests).forEach(k=>{if(d.tests[k].metrics[metric]!==undefined)commonTests.add(k);}));
+        const sorted=sortTestConditions(Array.from(commonTests));
+        const tableData={header:['Metric','Test',...labels],rows:[]};
+        if(nf===2)tableData.header.push('Change','% Change');
+        else if(nf>2)tableData.header.push('Mean','SD');
+        const chartData={labels:sorted,datasets:[]};
 
-        const chartData = { labels: sortedTests, datasets: [] };
-
-        if (numFiles === 1) {
-            const data = [];
-            sortedTests.forEach(k => { const v = allParsedData[0].tests[k]?.metrics[metric]; data.push(v); tableData.rows.push([metric, k, v]); });
-            chartData.datasets.push({ label: labels[0], data, backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, borderWidth: 1 });
-        } else if (numFiles === 2) {
-            const [d1, d2] = [[], []];
-            sortedTests.forEach(k => {
-                const v1 = allParsedData[0].tests[k]?.metrics[metric];
-                const v2 = allParsedData[1].tests[k]?.metrics[metric];
-                d1.push(v1); d2.push(v2);
-                let ch = 'N/A', pct = 'N/A';
-                if (v1 !== undefined && v2 !== undefined) { ch = v2 - v1; pct = v1 !== 0 ? (ch / v1) * 100 : 'N/A'; }
-                tableData.rows.push([metric, k, v1, v2, ch, pct]);
+        if(nf===1){
+            const data=[];
+            sorted.forEach(k=>{const v=allParsedData[0].tests[k]?.metrics[metric];data.push(v);tableData.rows.push([metric,k,v]);});
+            chartData.datasets.push({label:labels[0],data,fill:false,borderColor:CHART_COLORS[0].border,backgroundColor:CHART_COLORS[0].bg,borderWidth:2,pointRadius:4,pointHoverRadius:6});
+        } else if(nf===2){
+            const[d1,d2]=[[],[]];
+            sorted.forEach(k=>{
+                const v1=allParsedData[0].tests[k]?.metrics[metric],v2=allParsedData[1].tests[k]?.metrics[metric];
+                d1.push(v1);d2.push(v2);
+                let ch='N/A',pct='N/A';
+                if(v1!==undefined&&v2!==undefined){ch=v2-v1;pct=v1!==0?(ch/v1)*100:'N/A';}
+                tableData.rows.push([metric,k,v1,v2,ch,pct]);
             });
-            chartData.datasets.push({ label: labels[0], data: d1, backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, borderWidth: 1 });
-            chartData.datasets.push({ label: labels[1], data: d2, backgroundColor: CHART_COLORS[1].bg, borderColor: CHART_COLORS[1].border, borderWidth: 1 });
+            chartData.datasets.push({label:labels[0],data:d1,fill:false,borderColor:CHART_COLORS[0].border,backgroundColor:CHART_COLORS[0].bg,borderWidth:2,pointRadius:5,pointHoverRadius:7});
+            chartData.datasets.push({label:labels[1],data:d2,fill:false,borderColor:CHART_COLORS[1].border,backgroundColor:CHART_COLORS[1].bg,borderWidth:2,pointRadius:5,pointHoverRadius:7});
         } else {
-            allParsedData.forEach((fd, i) => {
-                const data = sortedTests.map(k => fd.tests[k]?.metrics[metric]);
-                chartData.datasets.push({ label: labels[i], data, backgroundColor: CHART_COLORS[i % CHART_COLORS.length].bg, borderColor: CHART_COLORS[i % CHART_COLORS.length].border, borderWidth: 1 });
+            allParsedData.forEach((fd,i)=>{
+                const data=sorted.map(k=>fd.tests[k]?.metrics[metric]);
+                chartData.datasets.push({label:labels[i],data,fill:false,borderColor:CHART_COLORS[i%CHART_COLORS.length].border,backgroundColor:CHART_COLORS[i%CHART_COLORS.length].bg,borderWidth:2,pointRadius:4,pointHoverRadius:6});
             });
-            sortedTests.forEach(k => {
-                const row = [metric, k];
-                const vals = allParsedData.map(fd => { const v = fd.tests[k]?.metrics[metric]; row.push(v !== undefined ? v : 'N/A'); return v; });
-                const valid = vals.filter(v => v !== undefined);
-                if (valid.length > 0) { const { mean, stdDev } = calcStats(valid); row.push(mean, stdDev); } else row.push('N/A', 'N/A');
+            sorted.forEach(k=>{
+                const row=[metric,k];
+                const vals=allParsedData.map(fd=>{const v=fd.tests[k]?.metrics[metric];row.push(v!==undefined?v:'N/A');return v;});
+                const valid=vals.filter(v=>v!==undefined);
+                if(valid.length>0){const{mean:m,stdDev:s}=calcStats(valid);row.push(m,s);}else row.push('N/A','N/A');
                 tableData.rows.push(row);
             });
         }
-        return { type: 'bar', chartData, tableData, numFiles, metric };
+        return{type:'line',chartData,tableData,numFiles:nf,metric};
     }
 
-    // ---- Radar analysis ----
-    function analyzeRadarData(test) {
-        const numFiles = allParsedData.length;
-        const labels = allParsedData.map(d => getLabel(d).length > 25 ? '...' + getLabel(d).slice(-22) : getLabel(d));
-        const radarMetrics = Array.from(document.querySelectorAll('#radar-metric-selector input:checked')).map(cb => cb.value);
-
-        const tableData = { header: ['Metric', ...labels], rows: [] };
-        if (numFiles === 2) tableData.header.push('Change', '% Change');
-        else if (numFiles > 2) tableData.header.push('Mean', 'Std Dev');
-
-        const maxValues = {};
-        radarMetrics.forEach(m => {
-            let max = 0;
-            allParsedData.forEach(d => { const v = d.tests[test]?.metrics[m]; if (v !== undefined && Math.abs(v) > max) max = Math.abs(v); });
-            maxValues[m] = max === 0 ? 1 : max;
+    function analyzeRadarData(test){
+        const nf=allParsedData.length;
+        const labels=allParsedData.map(d=>getLabel(d).length>22?'…'+getLabel(d).slice(-19):getLabel(d));
+        const radarMetrics=Array.from(document.querySelectorAll('#radar-metric-selector input:checked')).map(cb=>cb.value);
+        const tableData={header:['Metric',...labels],rows:[]};
+        if(nf===2)tableData.header.push('Change','% Change');
+        else if(nf>2)tableData.header.push('Mean','SD');
+        const maxValues={};
+        radarMetrics.forEach(m=>{let mx=0;allParsedData.forEach(d=>{const v=d.tests[test]?.metrics[m];if(v!==undefined&&Math.abs(v)>mx)mx=Math.abs(v);});maxValues[m]=mx===0?1:mx;});
+        const chartData={labels:radarMetrics,datasets:allParsedData.map((d,i)=>{
+            const nd=[],od=[];
+            radarMetrics.forEach(m=>{const v=d.tests[test]?.metrics[m];od.push(v);if(v===undefined){nd.push(NaN);return;}let n=v/maxValues[m];if(RADAR_KEY_METRICS[m]==='low')n=1-Math.abs(n);if(n<0)n=0;nd.push(n*100);});
+            return{label:labels[i],data:nd,originalData:od,backgroundColor:CHART_COLORS[i%CHART_COLORS.length].bg,borderColor:CHART_COLORS[i%CHART_COLORS.length].border,borderWidth:2,pointBackgroundColor:CHART_COLORS[i%CHART_COLORS.length].border,pointBorderColor:'#161b22',pointHoverBackgroundColor:'#fff',pointHoverBorderColor:CHART_COLORS[i%CHART_COLORS.length].border};
+        })};
+        radarMetrics.forEach(m=>{
+            const r=[m];const vals=allParsedData.map(d=>{const v=d.tests[test]?.metrics[m];r.push(v);return v;});
+            if(nf===2){const[v1,v2]=vals;let ch='N/A',pct='N/A';if(v1!==undefined&&v2!==undefined){ch=v2-v1;pct=v1!==0?(ch/v1)*100:'N/A';}r.push(ch,pct);}
+            else if(nf>2){const valid=vals.filter(v=>v!==undefined);if(valid.length>0){const{mean:m2,stdDev:s}=calcStats(valid);r.push(m2,s);}else r.push('N/A','N/A');}
+            tableData.rows.push(r);
         });
-
-        const chartData = {
-            labels: radarMetrics,
-            datasets: allParsedData.map((d, i) => {
-                const normalizedData = [], originalData = [];
-                radarMetrics.forEach(m => {
-                    const v = d.tests[test]?.metrics[m];
-                    originalData.push(v);
-                    if (v === undefined) { normalizedData.push(NaN); return; }
-                    let n = v / maxValues[m];
-                    if (RADAR_KEY_METRICS[m] === 'low') n = 1 - Math.abs(n);
-                    if (n < 0) n = 0;
-                    normalizedData.push(n * 100);
-                });
-                return { label: labels[i], data: normalizedData, originalData, backgroundColor: CHART_COLORS[i % CHART_COLORS.length].bg, borderColor: CHART_COLORS[i % CHART_COLORS.length].border, borderWidth: 2, pointBackgroundColor: CHART_COLORS[i % CHART_COLORS.length].border, pointBorderColor: '#fff', pointHoverBackgroundColor: '#fff', pointHoverBorderColor: CHART_COLORS[i % CHART_COLORS.length].border };
-            })
-        };
-
-        radarMetrics.forEach(m => {
-            const row = [m];
-            const vals = allParsedData.map(d => { const v = d.tests[test]?.metrics[m]; row.push(v); return v; });
-            if (numFiles === 2) {
-                const [v1, v2] = vals;
-                let ch = 'N/A', pct = 'N/A';
-                if (v1 !== undefined && v2 !== undefined) { ch = v2 - v1; pct = v1 !== 0 ? (ch / v1) * 100 : 'N/A'; }
-                row.push(ch, pct);
-            } else if (numFiles > 2) {
-                const valid = vals.filter(v => v !== undefined);
-                if (valid.length > 0) { const { mean, stdDev } = calcStats(valid); row.push(mean, stdDev); } else row.push('N/A', 'N/A');
-            }
-            tableData.rows.push(row);
-        });
-
-        return { type: 'radar', chartData, tableData, numFiles, test };
+        return{type:'radar',chartData,tableData,numFiles:nf,test};
     }
 
-    function calcStats(values) {
-        const mean = values.reduce((a, b) => a + b, 0) / values.length;
-        const stdDev = Math.sqrt(values.map(x => (x - mean) ** 2).reduce((a, b) => a + b, 0) / values.length);
-        return { mean, stdDev };
-    }
-
-    // ---- Chart render ----
-    function updateChart(analysis) {
+    function updateChart(analysis){
         destroyChart();
-        const ctx = chartCanvas.getContext('2d');
-
-        if (analysis.type === 'bar') {
-            resultsChart = new Chart(ctx, {
-                type: 'bar',
-                data: analysis.chartData,
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        title: { display: true, text: analysis.numFiles > 1 ? `${analysis.metric} Comparison` : analysis.metric, font: { size: 16 } },
-                        tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(3) : 'N/A'}` } }
-                    },
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Value' } }, x: { title: { display: true, text: 'Test Condition' } } }
-                }
-            });
-        } else if (analysis.type === 'radar') {
-            if (!analysis.chartData.labels?.length) { summaryTableContainer.innerHTML = '<p class="text-gray-500">Select at least one metric.</p>'; return; }
-            resultsChart = new Chart(ctx, {
-                type: 'radar',
-                data: analysis.chartData,
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    elements: { line: { tension: 0.1 } },
-                    scales: { r: { beginAtZero: true, min: 0, max: 100, pointLabels: { font: { size: 11 } }, ticks: { display: false, stepSize: 25 }, angleLines: { color: 'rgba(0,0,0,0.1)' }, grid: { color: 'rgba(0,0,0,0.1)' } } },
-                    plugins: {
-                        title: { display: true, text: `Profile: ${analysis.test} (Normalized)`, font: { size: 16 } },
-                        tooltip: { callbacks: { label: ctx => { const orig = ctx.dataset.originalData[ctx.dataIndex]; return `${ctx.dataset.label}: ${orig !== undefined ? orig.toFixed(3) : 'N/A'} (Score: ${ctx.parsed.r.toFixed(1)})`; } } }
-                    }
-                }
-            });
-        }
-    }
-
-    // ---- Table render with color-coded change ----
-    function updateTable(analysis) {
-        if (analysis.type === 'radar' && !analysis.chartData.labels?.length) {
-            summaryTableContainer.innerHTML = '<p class="text-gray-500">Select at least one metric.</p>'; return;
-        }
-        let html = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
-        analysis.tableData.header.forEach(h => {
-            html += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">${h}</th>`;
-        });
-        html += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-
-        analysis.tableData.rows.forEach(row => {
-            const metricName = row[0];
-            const direction = RADAR_KEY_METRICS[metricName];
-            html += '<tr>';
-            row.forEach((cell, idx) => {
-                const hdr = analysis.tableData.header[idx];
-                let val, extra = '';
-                if (typeof cell === 'number') {
-                    if (hdr === '% Change') val = (cell > 0 ? '+' : '') + cell.toFixed(1) + '%';
-                    else if (hdr === 'Change') val = (cell > 0 ? '+' : '') + cell.toFixed(3);
-                    else val = cell.toFixed(3);
-                    if ((hdr === 'Change' || hdr === '% Change') && direction && Math.abs(cell) > 0.00001) {
-                        const good = direction === 'high' ? cell > 0 : cell < 0;
-                        extra = good ? ' text-green-600 font-semibold' : ' text-red-600 font-semibold';
-                    }
-                } else {
-                    val = (cell === undefined || cell === null) ? 'N/A' : cell;
-                }
-                let cls = `px-4 py-3 whitespace-nowrap text-sm${extra}`;
-                if (!extra) cls += (idx === 0 || idx === 1) ? ' text-gray-900 font-medium' : ' text-gray-600';
-                html += `<td class="${cls}">${val}</td>`;
-            });
-            html += '</tr>';
-        });
-        html += '</tbody></table>';
-        summaryTableContainer.innerHTML = html;
-    }
-
-    // ---- #2 Birds Eye heatmap ----
-    function renderBirdsEye() {
-        destroyChart();
-        const tests = sortTestConditions(Array.from(allTestConditions));
-        const metrics = Object.keys(RADAR_KEY_METRICS).filter(m => allMetrics.has(m));
-        if (!tests.length || !metrics.length) { birdsEyeContainer.innerHTML = '<p class="text-gray-500 p-4">No key metric data found.</p>'; return; }
-
-        // Global min/max per metric for normalization
-        const ranges = {};
-        metrics.forEach(m => {
-            let min = Infinity, max = -Infinity;
-            allParsedData.forEach(s => tests.forEach(t => { const v = s.tests[t]?.metrics[m]; if (v !== undefined) { min = Math.min(min, v); max = Math.max(max, v); } }));
-            ranges[m] = { min: isFinite(min) ? min : 0, max: isFinite(max) ? max : 1 };
-        });
-
-        function score(m, v) {
-            const { min, max } = ranges[m];
-            let n = max === min ? 0.5 : (v - min) / (max - min);
-            if (RADAR_KEY_METRICS[m] === 'low') n = 1 - n;
-            return Math.max(0, Math.min(1, n)) * 100;
-        }
-
-        function cellStyle(s) {
-            if (s >= 66) return `background:rgba(22,163,74,${0.15 + s/200});color:#14532d`;
-            if (s >= 33) return `background:rgba(234,179,8,${0.2 + (s-33)/160});color:#713f12`;
-            return `background:rgba(239,68,68,${0.15 + (33-s)/66});color:#7f1d1d`;
-        }
-
-        function fmtVal(m, v) {
-            if (['Stability Score','Fatigue Ratio','Adaptation Ratio','Directionality'].some(x => m.includes(x.split(' ')[0]) && m === x)) return v.toFixed(1) + '%';
-            return v.toFixed(3);
-        }
-
-        let html = '<div class="space-y-8">';
-        allParsedData.forEach((session, si) => {
-            const color = CHART_COLORS[si % CHART_COLORS.length].solid;
-            if (allParsedData.length > 1) {
-                html += `<div class="flex items-center gap-2 mb-2"><div class="w-3 h-3 rounded-full" style="background:${color}"></div><span class="font-semibold text-gray-700">${getLabel(session)}</span></div>`;
-            }
-            html += `<div class="overflow-x-auto"><table class="border-collapse text-xs">`;
-            html += `<thead><tr><th class="px-3 py-2 text-left bg-gray-100 border border-gray-200 font-medium text-gray-600 whitespace-nowrap">Test</th>`;
-            metrics.forEach(m => { html += `<th class="px-2 py-2 text-center bg-gray-100 border border-gray-200 font-medium text-gray-600" style="min-width:88px">${m}</th>`; });
-            html += `</tr></thead><tbody>`;
-            tests.forEach(test => {
-                html += `<tr><td class="px-3 py-2 font-medium text-gray-700 border border-gray-200 bg-gray-50 whitespace-nowrap">${test}</td>`;
-                metrics.forEach(m => {
-                    const v = session.tests[test]?.metrics[m];
-                    if (v === undefined) { html += `<td class="heatmap-cell text-gray-300">—</td>`; return; }
-                    const s = score(m, v);
-                    let arrow = '';
-                    if (si > 0) {
-                        const pv = allParsedData[si - 1].tests[test]?.metrics[m];
-                        if (pv !== undefined) {
-                            const better = RADAR_KEY_METRICS[m] === 'high' ? v > pv : v < pv;
-                            arrow = better ? ' <span style="color:#15803d">↑</span>' : ' <span style="color:#dc2626">↓</span>';
-                        }
-                    }
-                    html += `<td class="heatmap-cell" style="${cellStyle(s)}">${fmtVal(m, v)}${arrow}</td>`;
-                });
-                html += `</tr>`;
-            });
-            html += `</tbody></table></div>`;
-        });
-        html += `</div>`;
-        html += `<div class="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-3 border-t">
-            <span class="font-medium">Legend:</span>
-            <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 rounded" style="background:rgba(239,68,68,0.55)"></span>Poor</span>
-            <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 rounded" style="background:rgba(234,179,8,0.5)"></span>Moderate</span>
-            <span class="flex items-center gap-1"><span class="inline-block w-4 h-4 rounded" style="background:rgba(22,163,74,0.55)"></span>Good</span>
-            ${allParsedData.length > 1 ? '<span class="ml-2">↑ improved &nbsp; ↓ worsened vs prior session</span>' : ''}
-        </div>`;
-        birdsEyeContainer.innerHTML = html;
-
-        // Summary table for birds eye
-        const numFiles = allParsedData.length;
-        const hdrs = ['Metric', 'Test', ...allParsedData.map(d => getLabel(d))];
-        if (numFiles === 2) hdrs.push('Change', '% Change');
-        let tbl = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
-        hdrs.forEach(h => tbl += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky top-0 bg-gray-50">${h}</th>`);
-        tbl += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-        metrics.forEach(m => {
-            tests.forEach(test => {
-                const vals = allParsedData.map(s => s.tests[test]?.metrics[m]);
-                if (!vals.some(v => v !== undefined)) return;
-                tbl += '<tr>';
-                tbl += `<td class="px-4 py-3 text-xs font-medium text-gray-900">${m}</td>`;
-                tbl += `<td class="px-4 py-3 text-xs text-gray-700">${test}</td>`;
-                vals.forEach(v => tbl += `<td class="px-4 py-3 text-xs text-gray-600">${v !== undefined ? v.toFixed(3) : 'N/A'}</td>`);
-                if (numFiles === 2) {
-                    const [v1, v2] = vals;
-                    if (v1 !== undefined && v2 !== undefined) {
-                        const ch = v2 - v1, pct = v1 !== 0 ? (ch / v1) * 100 : 0;
-                        const dir = RADAR_KEY_METRICS[m];
-                        const good = dir === 'high' ? ch > 0 : (dir === 'low' ? ch < 0 : null);
-                        const cls = good === true ? 'text-green-600 font-semibold' : good === false ? 'text-red-600 font-semibold' : 'text-gray-600';
-                        tbl += `<td class="px-4 py-3 text-xs ${cls}">${ch > 0 ? '+' : ''}${ch.toFixed(3)}</td>`;
-                        tbl += `<td class="px-4 py-3 text-xs ${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</td>`;
-                    } else tbl += '<td class="px-4 py-3 text-xs text-gray-400">N/A</td><td class="px-4 py-3 text-xs text-gray-400">N/A</td>';
-                }
-                tbl += '</tr>';
-            });
-        });
-        tbl += '</tbody></table>';
-        summaryTableContainer.innerHTML = tbl;
-    }
-
-    // ---- #5 COP Scatter ----
-    function renderCOPScatter() {
-        destroyChart();
-        const selectedTest = copTestSelect.value;
-        const tests = selectedTest === 'all' ? sortTestConditions(Array.from(allTestConditions)) : [selectedTest];
-
-        const hasData = allParsedData.some(d => tests.some(t => d.tests[t]?.metrics['Sway Center Xo'] !== undefined));
-        if (!hasData) {
-            chartContainer.innerHTML = '<p class="flex items-center justify-center h-full text-gray-500 text-sm">No COP (Sway Center) data found in uploaded files.</p>';
-            summaryTableContainer.innerHTML = '<p class="text-gray-500 text-sm">No Sway Center Xo/Yo data available.</p>';
-            return;
-        }
-
-        const ctx = chartCanvas.getContext('2d');
-        const datasets = allParsedData.map((session, si) => {
-            const points = [];
-            tests.forEach(test => {
-                const xo = session.tests[test]?.metrics['Sway Center Xo'];
-                const yo = session.tests[test]?.metrics['Sway Center Yo'];
-                if (xo !== undefined && yo !== undefined) points.push({ x: xo * 1000, y: yo * 1000, test });
-            });
-            return { label: getLabel(session), data: points, backgroundColor: CHART_COLORS[si % CHART_COLORS.length].bg, borderColor: CHART_COLORS[si % CHART_COLORS.length].border, pointRadius: 8, pointHoverRadius: 11 };
-        });
-
-        resultsChart = new Chart(ctx, {
-            type: 'scatter',
-            data: { datasets },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    title: { display: true, text: `COP Scatter — ${selectedTest === 'all' ? 'All Tests' : selectedTest}`, font: { size: 16 } },
-                    tooltip: { callbacks: { label: ctx => `${ctx.dataset.label} [${ctx.raw.test}]: X=${ctx.raw.x.toFixed(1)}mm, Y=${ctx.raw.y.toFixed(1)}mm` } }
+        const ctx=chartCanvas.getContext('2d');
+        if(analysis.type==='line'){
+            const metricKey=analysis.metric;
+            resultsChart=new Chart(ctx,{type:'line',data:analysis.chartData,options:{
+                responsive:true,maintainAspectRatio:false,
+                interaction:{mode:'index',intersect:false},
+                onClick:(event,elements,chart)=>{
+                    if(!elements.length)return;
+                    const{datasetIndex,index}=elements[0],key=`${metricKey}_${datasetIndex}_${index}`;
+                    const existing=pointAnnotations[key]||'';
+                    const comment=prompt('Add comment:',existing);
+                    if(comment!==null){if(comment.trim())pointAnnotations[key]=comment.trim();else delete pointAnnotations[key];chart.update();}
                 },
-                scales: {
-                    x: { title: { display: true, text: 'Xo — Medial-Lateral (mm)' }, grid: { color: 'rgba(0,0,0,0.07)' } },
-                    y: { title: { display: true, text: 'Yo — Anterior-Posterior (mm)' }, grid: { color: 'rgba(0,0,0,0.07)' } }
-                }
-            }
-        });
-
-        // Summary table
-        let tbl = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
-        ['Test', ...allParsedData.map(d => getLabel(d) + ' Xo (mm)'), ...allParsedData.map(d => getLabel(d) + ' Yo (mm)')].forEach(h => {
-            tbl += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky top-0 bg-gray-50">${h}</th>`;
-        });
-        tbl += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-        tests.forEach(test => {
-            tbl += `<tr><td class="px-4 py-3 text-xs font-medium text-gray-900">${test}</td>`;
-            allParsedData.forEach(s => { const v = s.tests[test]?.metrics['Sway Center Xo']; tbl += `<td class="px-4 py-3 text-xs text-gray-600">${v !== undefined ? (v * 1000).toFixed(2) : 'N/A'}</td>`; });
-            allParsedData.forEach(s => { const v = s.tests[test]?.metrics['Sway Center Yo']; tbl += `<td class="px-4 py-3 text-xs text-gray-600">${v !== undefined ? (v * 1000).toFixed(2) : 'N/A'}</td>`; });
-            tbl += '</tr>';
-        });
-        tbl += '</tbody></table>';
-        summaryTableContainer.innerHTML = tbl;
+                plugins:{
+                    title:{display:true,text:analysis.numFiles>1?`${analysis.metric} — Multi-session`:analysis.metric,font:{size:14,weight:'600'},color:'#e6edf3'},
+                    legend:{labels:{color:'#8b949e',font:{size:11}}},
+                    tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y!=null?ctx.parsed.y.toFixed(3):'N/A'}`}},
+                    datalabels:{display:ctx=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return!!pointAnnotations[k];},formatter:(v,ctx)=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return pointAnnotations[k]||'';},anchor:'end',align:'top',offset:4,font:{size:10},color:'#8b949e'}
+                },
+                scales:{y:{beginAtZero:true,title:{display:true,text:'Value',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.6)'},ticks:{color:'#8b949e'}},x:{title:{display:true,text:'Test Condition',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.4)'},ticks:{color:'#8b949e'}}}
+            }});
+        } else if(analysis.type==='radar'){
+            if(!analysis.chartData.labels?.length)return;
+            resultsChart=new Chart(ctx,{type:'radar',data:analysis.chartData,options:{
+                responsive:true,maintainAspectRatio:false,
+                elements:{line:{tension:0.1}},
+                scales:{r:{beginAtZero:true,min:0,max:100,pointLabels:{font:{size:11},color:'#8b949e'},ticks:{display:false,stepSize:25},angleLines:{color:'rgba(48,54,61,0.8)'},grid:{color:'rgba(48,54,61,0.6)'}}},
+                plugins:{title:{display:true,text:`Profile: ${analysis.test}`,font:{size:14,weight:'600'},color:'#e6edf3'},legend:{labels:{color:'#8b949e',font:{size:11}}},tooltip:{backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>{const orig=ctx.dataset.originalData[ctx.dataIndex];return`${ctx.dataset.label}: ${orig!==undefined?orig.toFixed(3):'N/A'} (${ctx.parsed.r.toFixed(1)})`;}}}}}
+            });
+        }
     }
 
-    // ---- #8 Export ----
-    exportCsvBtn.addEventListener('click', () => {
-        const table = summaryTableContainer.querySelector('table');
-        if (!table) return;
-        const rows = Array.from(table.querySelectorAll('tr')).map(tr =>
-            Array.from(tr.querySelectorAll('th,td')).map(c => `"${c.innerText.replace(/"/g, '""')}"`).join(',')
-        );
-        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `posturography_${currentView}_${new Date().toISOString().slice(0,10)}.csv`;
-        a.click(); URL.revokeObjectURL(a.href);
+    function updateTable(analysis){
+        if(analysis.type==='radar'&&!analysis.chartData.labels?.length){summaryTableContainer.innerHTML='<p style="font-size:12px;color:var(--text3);">Select at least one metric.</p>';return;}
+        let html=`<table class="data-table"><thead><tr>`;
+        analysis.tableData.header.forEach(h=>html+=`<th>${escapeHtml(h)}</th>`);
+        html+=`</tr></thead><tbody>`;
+        analysis.tableData.rows.forEach(row=>{
+            const metricName=row[0],dir=RADAR_KEY_METRICS[metricName];
+            html+=`<tr>`;
+            row.forEach((cell,idx)=>{
+                const hdr=analysis.tableData.header[idx];
+                let val,cls='';
+                if(typeof cell==='number'){
+                    if(hdr==='% Change')val=(cell>0?'+':'')+cell.toFixed(1)+'%';
+                    else if(hdr==='Change')val=(cell>0?'+':'')+cell.toFixed(3);
+                    else val=cell.toFixed(3);
+                    if((hdr==='Change'||hdr==='% Change')&&dir&&Math.abs(cell)>0.00001){
+                        const good=dir==='high'?cell>0:cell<0;
+                        cls=good?' class="td-good"':' class="td-bad"';
+                    }
+                } else { val=cell===undefined||cell===null?'N/A':String(cell); }
+                const baseCls=idx<=1?'class="td-name"':'';
+                html+=`<td ${cls||baseCls}>${escapeHtml(val)}</td>`;
+            });
+            html+=`</tr>`;
+        });
+        html+=`</tbody></table>`;
+        summaryTableContainer.innerHTML=html;
+    }
+
+    // ---- Birds Eye ----
+    function renderBirdsEye(){
+        destroyChart();
+        const tests=sortTestConditions(Array.from(allTestConditions));
+        const metrics=Object.keys(RADAR_KEY_METRICS).filter(m=>allMetrics.has(m));
+        if(!tests.length||!metrics.length){birdsEyeContainer.innerHTML='<p style="font-size:12px;color:var(--text3);">No key metric data found.</p>';return;}
+        const ranges={};
+        metrics.forEach(m=>{
+            let min=Infinity,max=-Infinity;
+            allParsedData.forEach(s=>tests.forEach(t=>{const v=s.tests[t]?.metrics[m];if(v!==undefined){min=Math.min(min,v);max=Math.max(max,v);}}));
+            ranges[m]={min:isFinite(min)?min:0,max:isFinite(max)?max:1};
+        });
+        function score(m,v){const{min,max}=ranges[m];let n=max===min?0.5:(v-min)/(max-min);if(RADAR_KEY_METRICS[m]==='low')n=1-n;return Math.max(0,Math.min(1,n))*100;}
+        function cellStyle(s){
+            if(s>=66)return`background:rgba(63,185,80,${0.08+s/250});color:#3fb950;`;
+            if(s>=33)return`background:rgba(210,153,34,${0.1+(s-33)/200});color:#d29922;`;
+            return`background:rgba(248,81,73,${0.1+(33-s)/80});color:#f85149;`;
+        }
+        function fmtVal(m,v){if(['Stability Score','Fatigue Ratio','Adaptation Ratio','Directionality'].includes(m))return v.toFixed(1)+'%';return v.toFixed(3);}
+
+        let html='<div style="display:flex;flex-direction:column;gap:20px;">';
+        allParsedData.forEach((session,si)=>{
+            const color=CHART_COLORS[si%CHART_COLORS.length].solid;
+            if(allParsedData.length>1)html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><div style="width:10px;height:10px;border-radius:50%;background:${color};"></div><span style="font-size:12px;font-weight:600;color:var(--text);">${escapeHtml(getLabel(session))}</span></div>`;
+            html+=`<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:11px;">`;
+            html+=`<thead><tr><th style="padding:5px 10px;text-align:left;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:10px;text-transform:uppercase;white-space:nowrap;">Test</th>`;
+            metrics.forEach(m=>html+=`<th style="padding:5px 8px;text-align:center;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:10px;text-transform:uppercase;min-width:90px;">${escapeHtml(m)}</th>`);
+            html+=`</tr></thead><tbody>`;
+            tests.forEach(test=>{
+                html+=`<tr><td style="padding:5px 10px;font-weight:600;color:var(--text2);border:1px solid var(--border2);background:var(--surface2);white-space:nowrap;font-size:11px;">${test}</td>`;
+                metrics.forEach(m=>{
+                    const v=session.tests[test]?.metrics[m];
+                    if(v===undefined){html+=`<td style="padding:5px 8px;text-align:center;border:1px solid var(--border2);color:var(--text3);">—</td>`;return;}
+                    const s=score(m,v);
+                    let arrow='';
+                    if(si>0){const pv=allParsedData[si-1].tests[test]?.metrics[m];if(pv!==undefined){const better=RADAR_KEY_METRICS[m]==='high'?v>pv:v<pv;arrow=better?' <span style="color:var(--green)">↑</span>':' <span style="color:var(--red)">↓</span>';}}
+                    html+=`<td class="heatmap-cell" style="${cellStyle(s)}">${escapeHtml(fmtVal(m,v))}${arrow}</td>`;
+                });
+                html+=`</tr>`;
+            });
+            html+=`</tbody></table></div>`;
+        });
+        html+=`</div><div style="margin-top:12px;display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text3);padding-top:10px;border-top:1px solid var(--border2);">
+            <span style="font-weight:600;">Legend:</span>
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:14px;height:14px;border-radius:3px;background:rgba(248,81,73,0.4);display:inline-block;"></span>Poor</span>
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:14px;height:14px;border-radius:3px;background:rgba(210,153,34,0.4);display:inline-block;"></span>Moderate</span>
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:14px;height:14px;border-radius:3px;background:rgba(63,185,80,0.4);display:inline-block;"></span>Good</span>
+            ${allParsedData.length>1?'<span style="margin-left:8px;">↑ improved · ↓ worsened vs prior session</span>':''}
+        </div>`;
+        birdsEyeContainer.innerHTML=html;
+
+        // summary table
+        const nf=allParsedData.length;
+        const hdrs=['Metric','Test',...allParsedData.map(d=>getLabel(d))];
+        if(nf===2)hdrs.push('Change','% Change');
+        let tbl=`<table class="data-table"><thead><tr>`;
+        hdrs.forEach(h=>tbl+=`<th>${escapeHtml(h)}</th>`);
+        tbl+=`</tr></thead><tbody>`;
+        metrics.forEach(m=>{
+            tests.forEach(test=>{
+                const vals=allParsedData.map(s=>s.tests[test]?.metrics[m]);
+                if(!vals.some(v=>v!==undefined))return;
+                tbl+=`<tr><td class="td-name">${escapeHtml(m)}</td><td>${test}</td>`;
+                vals.forEach(v=>tbl+=`<td>${v!==undefined?v.toFixed(3):'N/A'}</td>`);
+                if(nf===2){const[v1,v2]=vals;if(v1!==undefined&&v2!==undefined){const ch=v2-v1,pct=v1!==0?(ch/v1)*100:0;const dir=RADAR_KEY_METRICS[m];const g=dir==='high'?ch>0:dir==='low'?ch<0:null;const c=g===true?' class="td-good"':g===false?' class="td-bad"':'';tbl+=`<td${c}>${ch>0?'+':''}${ch.toFixed(3)}</td><td${c}>${pct>0?'+':''}${pct.toFixed(1)}%</td>`;}else tbl+=`<td>N/A</td><td>N/A</td>`;}
+                tbl+=`</tr>`;
+            });
+        });
+        tbl+=`</tbody></table>`;
+        summaryTableContainer.innerHTML=tbl;
+    }
+
+    // ---- COP Scatter ----
+    function renderCOPScatter(){
+        destroyChart();
+        const selTest=copTestSelect.value;
+        const tests=selTest==='all'?sortTestConditions(Array.from(allTestConditions)):[selTest];
+        const hasData=allParsedData.some(d=>tests.some(t=>d.tests[t]?.metrics['Sway Center Xo']!==undefined));
+        if(!hasData){chartContainer.innerHTML='<p style="text-align:center;padding:40px;color:var(--text3);font-size:13px;">No COP data found.</p>';return;}
+        const ctx=chartCanvas.getContext('2d');
+        const datasets=allParsedData.map((session,si)=>{
+            const pts=[];
+            tests.forEach(test=>{const xo=session.tests[test]?.metrics['Sway Center Xo'],yo=session.tests[test]?.metrics['Sway Center Yo'];if(xo!==undefined&&yo!==undefined)pts.push({x:xo*1000,y:yo*1000,test});});
+            return{label:getLabel(session),data:pts,backgroundColor:CHART_COLORS[si%CHART_COLORS.length].bg,borderColor:CHART_COLORS[si%CHART_COLORS.length].border,pointRadius:9,pointHoverRadius:12};
+        });
+        resultsChart=new Chart(ctx,{type:'scatter',data:{datasets},options:{
+            responsive:true,maintainAspectRatio:false,
+            plugins:{title:{display:true,text:`COP — ${selTest==='all'?'All Tests':selTest}`,font:{size:14,weight:'600'},color:'#e6edf3'},legend:{labels:{color:'#8b949e',font:{size:11}}},tooltip:{backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label} [${ctx.raw.test}]: X=${ctx.raw.x.toFixed(1)}mm, Y=${ctx.raw.y.toFixed(1)}mm`}}},
+            scales:{x:{title:{display:true,text:'Xo — Medial-Lateral (mm)',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.5)'},ticks:{color:'#8b949e'}},y:{title:{display:true,text:'Yo — Anterior-Posterior (mm)',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.5)'},ticks:{color:'#8b949e'}}}
+        }});
+        let tbl=`<table class="data-table"><thead><tr>`;
+        ['Test',...allParsedData.map(d=>getLabel(d)+' Xo (mm)'),...allParsedData.map(d=>getLabel(d)+' Yo (mm)')].forEach(h=>tbl+=`<th>${escapeHtml(h)}</th>`);
+        tbl+=`</tr></thead><tbody>`;
+        tests.forEach(test=>{
+            tbl+=`<tr><td class="td-name">${test}</td>`;
+            allParsedData.forEach(s=>{const v=s.tests[test]?.metrics['Sway Center Xo'];tbl+=`<td>${v!==undefined?(v*1000).toFixed(2):'N/A'}</td>`;});
+            allParsedData.forEach(s=>{const v=s.tests[test]?.metrics['Sway Center Yo'];tbl+=`<td>${v!==undefined?(v*1000).toFixed(2):'N/A'}</td>`;});
+            tbl+=`</tr>`;
+        });
+        tbl+=`</tbody></table>`;
+        summaryTableContainer.innerHTML=tbl;
+    }
+
+    // ---- Export ----
+    exportCsvBtn.addEventListener('click',()=>{
+        const table=summaryTableContainer.querySelector('table');if(!table)return;
+        const rows=Array.from(table.querySelectorAll('tr')).map(tr=>Array.from(tr.querySelectorAll('th,td')).map(c=>`"${c.textContent.trim().replace(/"/g,'""')}"`).join(','));
+        const blob=new Blob([rows.join('\n')],{type:'text/csv'});
+        const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`posturography_${currentView}_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);
+    });
+    exportPngBtn.addEventListener('click',()=>{
+        if(!resultsChart)return;
+        const a=document.createElement('a');a.href=resultsChart.toBase64Image('image/png',1.0);a.download=`posturography_${currentView}_${new Date().toISOString().slice(0,10)}.png`;a.click();
     });
 
-    exportPngBtn.addEventListener('click', () => {
-        if (!resultsChart) return;
-        const a = document.createElement('a');
-        a.href = resultsChart.toBase64Image('image/png', 1.0);
-        a.download = `posturography_${currentView}_${new Date().toISOString().slice(0,10)}.png`;
-        a.click();
-    });
-
-    // ---- #7 Full Report ----
+    // ---- Full Report ----
     fullReportBtn.addEventListener('click', generateFullReport);
 
-    async function generateFullReport() {
-        fullReportBtn.disabled = true;
-        document.getElementById('full-report-btn-text').textContent = 'Generating...';
+    async function generateFullReport(){
+        fullReportBtn.disabled=true;
+        document.getElementById('full-report-btn-text').textContent='Generating…';
         document.getElementById('full-report-loading').classList.remove('hidden');
-        setInterpretationStatus('Generating comprehensive report...');
+        interpretationOutput.textContent='Generating comprehensive report…';
 
-        const tests = sortTestConditions(Array.from(allTestConditions));
-        const metrics = Array.from(allMetrics).filter(m => m !== 'Test Status' && m !== 'Stability Class').sort();
-        let dump = `POSTUROGRAPHY REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n\n`;
+        const tests=sortTestConditions(Array.from(allTestConditions));
+        const metrics=Array.from(allMetrics).filter(m=>m!=='Test Status'&&m!=='Stability Class').sort();
+        const KEY=['Stability Score','Fatigue Ratio','Adaptation Ratio','Sway Path Length','Sway Velocity (Ave)','Area 95% Conf. Ellipse'];
 
-        tests.forEach(test => {
-            dump += `=== ${test} ===\n`;
-            metrics.forEach(m => {
-                const vals = allParsedData.map(d => d.tests[test]?.metrics[m]);
-                if (!vals.some(v => v !== undefined)) return;
-                dump += `  ${m}: ${allParsedData.map((d, i) => { const v = vals[i]; return v !== undefined ? `${getLabel(d)}: ${typeof v === 'number' ? v.toFixed(3) : v}` : null; }).filter(Boolean).join(' | ')}\n`;
-                if (allParsedData.length === 2 && vals[0] !== undefined && vals[1] !== undefined && typeof vals[0] === 'number') {
-                    const ch = vals[1] - vals[0], pct = vals[0] !== 0 ? (ch / vals[0] * 100).toFixed(1) : 'N/A';
-                    const dir = RADAR_KEY_METRICS[m];
-                    const status = dir ? (dir === 'high' ? ch > 0 : ch < 0) ? '[IMPROVED]' : '[WORSENED]' : '';
-                    dump += `    → ${ch > 0 ? '+' : ''}${ch.toFixed(3)} (${ch > 0 ? '+' : ''}${pct}%) ${status}\n`;
-                }
+        let diag;
+        try { diag = computeAllDiagnostics(); } catch(e2) { diag = null; }
+
+        let dump=`POSTUROGRAPHY FULL REPORT\nSessions: ${allParsedData.map(d=>getLabel(d)).join(' → ')}\n\n`;
+
+        tests.forEach(tk=>{
+            dump+=`=== ${tk} ===\n`;
+            if(diag?.multivariate?.[tk]?.comment) dump+=`  [PCA] ${diag.multivariate[tk].comment}\n`;
+            metrics.forEach(m=>{
+                const vals=allParsedData.map(d=>d.tests[tk]?.metrics[m]);
+                if(!vals.some(v=>v!==undefined))return;
+                const nums=numSeries(vals);
+                const ds=descStats(nums);
+                dump+=`  ${m}: ${allParsedData.map((d,i)=>{const v=vals[i];return v!==undefined?`${getLabel(d)}=${typeof v==='number'?v.toFixed(3):v}`:null;}).filter(Boolean).join(' | ')}`;
+                if(ds){dump+=` | mean=${ds.mean.toFixed(3)} SD=${ds.sd!==undefined?ds.sd.toFixed(3):'N/A'} CV=${ds.cv!==undefined?ds.cv.toFixed(1)+'%':'N/A'}`;
+                if(diag?.inferential?.[tk]?.[m]?.earlyLateComment)dump+=` | ${diag.inferential[tk][m].earlyLateComment}`;}
+                dump+=`\n`;
+                if(allParsedData.length===2&&vals[0]!==undefined&&vals[1]!==undefined&&typeof vals[0]==='number'){const ch=vals[1]-vals[0],pct=vals[0]!==0?(ch/vals[0]*100).toFixed(1):'N/A';const dir=RADAR_KEY_METRICS[m];const status=dir?(dir==='high'?ch>0:ch<0)?'[IMPROVED]':'[WORSENED]':'';dump+=`    → ${ch>0?'+':''}${ch.toFixed(3)} (${ch>0?'+':''}${pct}%) ${status}\n`;}
             });
-            dump += '\n';
+            if(diag?.correlation?.[tk]?.length){dump+=`  [Correlations]\n`;diag.correlation[tk].forEach(c=>dump+=`    ${c.comment}\n`);}
+            if(diag?.regression?.[tk]?.length){dump+=`  [Regression]\n`;diag.regression[tk].forEach(r=>dump+=`    ${r.comment}\n`);}
+            if(diag?.longitudinal?.[tk]&&Object.keys(diag.longitudinal[tk]).length){dump+=`  [Longitudinal]\n`;Object.keys(diag.longitudinal[tk]).forEach(m=>dump+=`    ${diag.longitudinal[tk][m].comment}\n`);}
+            dump+=`\n`;
         });
 
-        const sys = `You are a clinical expert in vestibular and balance disorders with deep expertise in computerized dynamic posturography (CDP).
-Provide a comprehensive, structured interpretation of the data across ALL test conditions.
-Structure: Executive Summary → Test-by-Test Analysis → Key Patterns → Clinical Implications.
-- Executive summary: 2–3 sentences capturing the overall picture.
-- Highlight clinically significant changes (≥10% is typically meaningful).
-- Comment on sensory system patterns (visual, vestibular, somatosensory).
-- Be professional and evidence-based. Do not make a diagnosis.`;
+        const sys=`You are a clinical expert in vestibular and balance disorders with deep expertise in computerized dynamic posturography (CDP).
+Provide a comprehensive structured interpretation.
+Structure: Executive Summary → Test-by-Test Analysis → Statistical Highlights (comment on SD consistency/inconsistency, correlations, regressions, and longitudinal trends) → Clinical Implications.
+For any metric where CV>25% or permutation p<0.05, flag it explicitly.
+Be professional and evidence-based. Do not diagnose.`;
 
         try {
-            const text = await callAI(sys, `Interpret the following posturography data:\n\n${dump}`);
-            setInterpretationResult(text);
-        } catch (e) {
-            console.error('Full report error:', e);
-            setInterpretationStatus(`Error: ${e.message}\n\nIf this says "Failed to fetch", open this file via a local server (e.g. VS Code Live Server) rather than directly from the file system.`);
+            const text=await callAI(sys,`Interpret the following posturography data:\n\n${dump}`);
+            interpretationOutput.innerHTML=renderMd(text);
+        } catch(e){
+            interpretationOutput.textContent=`Error: ${e.message}`;
         } finally {
-            fullReportBtn.disabled = false;
-            document.getElementById('full-report-btn-text').textContent = 'Full Report';
+            fullReportBtn.disabled=false;
+            document.getElementById('full-report-btn-text').textContent='Full Report';
             document.getElementById('full-report-loading').classList.add('hidden');
-            interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            interpretationOutput.scrollIntoView({behavior:'smooth',block:'nearest'});
         }
     }
 
-    // ---- Interpret current view ----
+    // ---- Interpret View ----
     interpretationButton.addEventListener('click', getInterpretation);
 
-    async function getInterpretation() {
-        interpretationButton.disabled = true;
-        document.getElementById('interpret-button-text').textContent = 'Generating...';
+    async function getInterpretation(){
+        interpretationButton.disabled=true;
+        document.getElementById('interpret-button-text').textContent='Generating…';
         document.getElementById('interpret-icon').classList.add('hidden');
         document.getElementById('interpret-loading').classList.remove('hidden');
-        setInterpretationStatus('Analyzing...');
-        interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        interpretationOutput.textContent='Analyzing…';
 
-        const table = summaryTableContainer.querySelector('table');
-        if (!table) {
-            setInterpretationStatus('No summary data found. Please load data files first.');
-            resetInterpretBtn(); return;
-        }
+        const table=summaryTableContainer.querySelector('table');
+        if(!table){interpretationOutput.textContent='No data. Load files first.';resetInterpretBtn();return;}
+        const summaryText=Array.from(table.querySelectorAll('tr')).map(tr=>Array.from(tr.querySelectorAll('th,td')).map(c=>c.textContent.trim()).join(' | ')).join('\n').trim();
 
-        // Use textContent (not innerText) — works regardless of overflow/layout
-        const summaryText = Array.from(table.querySelectorAll('tr')).map(tr =>
-            Array.from(tr.querySelectorAll('th,td')).map(c => c.textContent.trim()).join(' | ')
-        ).join('\n').trim();
-
-        if (!summaryText) {
-            setInterpretationStatus('Summary table is empty. Please select a metric or test condition.');
-            resetInterpretBtn(); return;
-        }
-
-        let sys = '', query = '';
-        if (currentView === 'metric') {
-            const m = metricSelect.value;
-            if (!m) { setInterpretationStatus('Please select a metric first.'); resetInterpretBtn(); return; }
-            sys = `You are a clinical expert in vestibular and balance disorders.
-Analyze posturography data for the metric: ${m}.
-- For n=2: focus on magnitude and direction of change between sessions.
-- For n>2: focus on mean and variability.
-- For n=1: describe relative to typical expectations.
-- Highlight which test conditions show the most significant findings.
-- Be concise, professional. Do not diagnose.
-Start with heading: "Interpretation: ${m}"`;
-            query = `Posturography data for "${m}":\n---\n${summaryText}\n---`;
-        } else if (currentView === 'radar') {
-            const t = testSelect.value;
-            if (!t) { setInterpretationStatus('Please select a test condition first.'); resetInterpretBtn(); return; }
-            sys = `You are a clinical expert in vestibular and balance disorders.
-Analyze the comprehensive profile for test condition: ${t}.
-- Compare sessions across all provided metrics.
-- For n=2: comment on overall profile change.
-- Be concise, professional. Do not diagnose.
-Start with: "Comprehensive Profile: ${t}"`;
-            query = `Key metrics for "${t}":\n---\n${summaryText}\n---`;
-        } else if (currentView === 'birdsEye') {
-            sys = `You are a clinical expert in vestibular and balance disorders.
-Analyze the birds eye posturography summary across all test conditions and key metrics.
-Identify overall performance patterns and highlight the most clinically notable findings.
-Do not diagnose. Start with: "Birds Eye Summary"`;
-            query = `Birds Eye data:\n---\n${summaryText}\n---`;
-        } else if (currentView === 'cop') {
-            sys = `You are a clinical expert in vestibular and balance disorders.
-Interpret the Center of Pressure (COP) scatter data. Comment on lateral/AP displacement patterns,
-asymmetry between test conditions, and any notable changes between sessions.
-Do not diagnose. Start with: "COP Analysis"`;
-            query = `COP Sway Center data (in mm):\n---\n${summaryText}\n---`;
+        let sys='',query='';
+        if(currentView==='metric'){
+            const m=metricSelect.value;if(!m){interpretationOutput.textContent='Select a metric first.';resetInterpretBtn();return;}
+            const tests=sortTestConditions(Array.from(allTestConditions));
+            const sdRows=tests.map(tk=>{const ds=descStats(numSeries(getSeriesFor(tk,m)));return ds?.sd!=null?{tk,sd:ds.sd,cv:ds.cv}:null;}).filter(Boolean).sort((a,b)=>b.sd-a.sd);
+            const sdNote=sdRows.length?`\n[SD Analysis]\nHighest variability: ${sdRows[0].tk} (SD=${sdRows[0].sd.toFixed(3)}, CV=${sdRows[0].cv?.toFixed(1)}%)\nLowest variability: ${sdRows[sdRows.length-1].tk} (SD=${sdRows[sdRows.length-1].sd.toFixed(3)}, CV=${sdRows[sdRows.length-1].cv?.toFixed(1)}%)`:'\n[No SD data]';
+            sys=`You are a clinical expert in vestibular and balance disorders. Analyze posturography data for: ${m}. Comment explicitly on SD consistency/inconsistency across test conditions and sessions. Be concise. Start: "Interpretation: ${m}"`;
+            query=`Data:\n${summaryText}\n${sdNote}`;
+        } else if(currentView==='radar'){
+            const t=testSelect.value;if(!t){interpretationOutput.textContent='Select a test condition.';resetInterpretBtn();return;}
+            sys=`You are a clinical expert in vestibular and balance disorders. Analyze the comprehensive profile for: ${t}. Comment on SD and variability where relevant. Be concise. Start: "Profile: ${t}"`;
+            query=`Data:\n${summaryText}`;
+        } else if(currentView==='birdsEye'){
+            sys=`You are a clinical expert in vestibular and balance disorders. Analyze the birds-eye summary. Identify patterns, flag high-SD metrics as inconsistent, flag low-SD metrics as consistent. Start: "Birds Eye Summary"`;
+            query=`Data:\n${summaryText}`;
+        } else if(currentView==='cop'){
+            sys=`You are a clinical expert in vestibular and balance disorders. Interpret COP scatter data. Comment on lateral/AP asymmetry and displacement patterns. Start: "COP Analysis"`;
+            query=`COP data (mm):\n${summaryText}`;
         }
 
         try {
-            const result = await callAI(sys, query);
-            setInterpretationResult(result);
-        } catch (e) {
-            console.error('AI interpretation error:', e);
-            setInterpretationStatus(`Error: ${e.message}\n\nIf this says "Failed to fetch", open this file via a local server (e.g. VS Code Live Server) rather than directly from the file system.`);
+            const result=await callAI(sys,query);
+            interpretationOutput.innerHTML=renderMd(result);
+        } catch(e){
+            interpretationOutput.textContent=`Error: ${e.message}`;
         } finally {
             resetInterpretBtn();
-            interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            interpretationOutput.scrollIntoView({behavior:'smooth',block:'nearest'});
         }
     }
 
-    function resetInterpretBtn() {
-        interpretationButton.disabled = false;
-        document.getElementById('interpret-button-text').textContent = 'Interpret View';
+    function resetInterpretBtn(){
+        interpretationButton.disabled=false;
+        document.getElementById('interpret-button-text').textContent='Interpret View';
         document.getElementById('interpret-icon').classList.remove('hidden');
         document.getElementById('interpret-loading').classList.add('hidden');
     }
 
-    async function callAI(systemPrompt, userMessage) {
+    async function callAI(systemPrompt, userMessage){
         let response;
         try {
-            response = await fetch('/api/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ max_tokens: AI_REQUEST_DEFAULTS.maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] })
-            });
-        } catch (networkErr) {
-            throw new Error(`Network error: ${networkErr.message}. Make sure the app is opened through the running server, and verify that the backend is reachable.`);
-        }
-        if (!response.ok) {
-            const payload = await response.json().catch(() => ({}));
-            const mainMessage = payload?.error?.message || `HTTP ${response.status}`;
-            const details = payload?.error?.details;
-            throw new Error(details ? `${mainMessage}\n\nReason: ${details}` : mainMessage);
-        }
-        const result = await response.json();
-        if (result.content?.[0]?.text) return result.content[0].text;
-        throw new Error('The AI service returned an unexpected response format.');
+            response=await fetch('/api/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({max_tokens:AI_REQUEST_DEFAULTS.maxTokens,system:systemPrompt,messages:[{role:'user',content:userMessage}]})});
+        } catch(ne){throw new Error(`Network error: ${ne.message}`);}
+        if(!response.ok){const p=await response.json().catch(()=>({}));throw new Error(p?.error?.message||`HTTP ${response.status}`);}
+        const result=await response.json();
+        if(result.content?.[0]?.text)return result.content[0].text;
+        throw new Error('Unexpected response format.');
     }
-
 </script>
 </body>
 </html>
