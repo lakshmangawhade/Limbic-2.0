@@ -89,6 +89,7 @@
         .btn-purple:hover { background: #8957e5; }
         .btn-ghost { background: var(--surface2); border-color: var(--border); color: var(--text2); }
         .btn-ghost:hover { border-color: var(--text3); color: var(--text); }
+        .chart-type-active { border-color: var(--accent) !important; color: var(--accent) !important; background: rgba(88,166,255,0.12) !important; }
 
         /* Panel */
         .panel { background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; }
@@ -248,7 +249,7 @@
                     <div>
                         <label>Analysis Mode</label>
                         <select id="analysis-mode-select">
-                            <option value="metric">Metric Comparison (Line)</option>
+                            <option value="metric">Metric Comparison</option>
                             <option value="radar">Comprehensive View (Radar)</option>
                             <option value="birdsEye">Birds Eye (Heatmap)</option>
                             <option value="cop">COP Scatter Plot</option>
@@ -311,8 +312,13 @@
                         </div>
                     </div>
                     <div style="padding:16px;">
+                        <div id="chart-type-wrap" class="hidden" style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+                            <span style="font-size:11px;color:var(--text3);">Chart:</span>
+                            <button type="button" id="chart-line-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">Line</button>
+                            <button type="button" id="chart-bar-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">Bar</button>
+                        </div>
                         <div id="chart-container" style="position:relative;height:340px;"><canvas id="results-chart"></canvas></div>
-                        <p id="line-chart-hint" class="hidden" style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">Click a point to add a comment annotation.</p>
+                        <p id="line-chart-hint" class="hidden" style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">Click a point or bar to add a comment annotation.</p>
                         <div id="birdsEye-container" class="hidden"></div>
                         <p id="radar-disclaimer" class="hidden" style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">Values normalized 0–100. "100" = best. Tooltips show original values.</p>
                     </div>
@@ -379,6 +385,14 @@
                                 <svg id="interpret-loading" class="hidden animate-spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                                 <span id="interpret-button-text">Interpret View</span>
                             </button>
+                            <button id="exec-summary-btn" class="btn btn-green">
+                                <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                <span id="exec-summary-btn-text">Executive Summary</span>
+                                <svg id="exec-summary-loading" class="hidden animate-spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            </button>
+                            <button type="button" id="edit-interpretation-btn" class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" disabled title="Edit the generated report">Edit</button>
+                            <button type="button" id="save-edit-btn" class="btn btn-green hidden" style="font-size:12px;padding:6px 12px;">Save</button>
+                            <button type="button" id="cancel-edit-btn" class="btn btn-ghost hidden" style="font-size:12px;padding:6px 12px;">Cancel</button>
                         </div>
                     </div>
                     <div style="padding:16px;">
@@ -406,6 +420,9 @@
     let resultsChart = null;
     let currentView = 'metric';
     let activeStatTab = 'descriptive';
+    let metricChartStyle = 'line';
+    let lastInterpretationRaw = '';
+    let interpretationEditMode = false;
 
     const RADAR_KEY_METRICS = {
         'Stability Score': 'high',
@@ -476,6 +493,13 @@
     const interpretationButton = document.getElementById('interpretation-button');
     const interpretationOutput = document.getElementById('interpretation-output');
     const fullReportBtn = document.getElementById('full-report-btn');
+    const execSummaryBtn = document.getElementById('exec-summary-btn');
+    const editInterpretationBtn = document.getElementById('edit-interpretation-btn');
+    const saveEditBtn = document.getElementById('save-edit-btn');
+    const cancelEditBtn = document.getElementById('cancel-edit-btn');
+    const chartLineBtn = document.getElementById('chart-line-btn');
+    const chartBarBtn = document.getElementById('chart-bar-btn');
+    const chartTypeWrap = document.getElementById('chart-type-wrap');
     const exportPngBtn = document.getElementById('export-png-btn');
     const exportCsvBtn = document.getElementById('export-csv-btn');
     const statsContent = document.getElementById('stats-content');
@@ -505,6 +529,37 @@
         }
         flushP(); flushL();
         return out.join('') || `<p>${escapeHtml(md||'')}</p>`;
+    }
+
+    function setInterpretationMarkdown(text) {
+        lastInterpretationRaw = String(text || '');
+        interpretationOutput.innerHTML = renderMd(lastInterpretationRaw);
+        const has = !!lastInterpretationRaw.trim();
+        editInterpretationBtn.disabled = !has || interpretationEditMode;
+    }
+
+    function syncChartTypeButtons() {
+        if (!chartLineBtn || !chartBarBtn) return;
+        chartLineBtn.classList.toggle('chart-type-active', metricChartStyle === 'line');
+        chartBarBtn.classList.toggle('chart-type-active', metricChartStyle === 'bar');
+    }
+
+    function leaveInterpretationEditView() {
+        interpretationEditMode = false;
+        saveEditBtn.classList.add('hidden');
+        cancelEditBtn.classList.add('hidden');
+        editInterpretationBtn.classList.remove('hidden');
+    }
+
+    function flushInterpretationEditBeforeGenerate() {
+        if (!interpretationEditMode) return;
+        const ta = document.getElementById('interpretation-editor');
+        if (ta) setInterpretationMarkdown(ta.value);
+        leaveInterpretationEditView();
+        fullReportBtn.disabled = false;
+        interpretationButton.disabled = false;
+        execSummaryBtn.disabled = false;
+        editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
     }
 
     // ---- Stats helpers ----
@@ -1123,6 +1178,11 @@
         resultsSection.classList.add('hidden'); placeholder.classList.remove('hidden'); loading.classList.add('hidden');
         fileListHelper.classList.add('hidden'); fileActionButtons.style.display='none';
         interpretationOutput.textContent='Click a button to generate an AI-powered clinical interpretation.';
+        lastInterpretationRaw='';
+        leaveInterpretationEditView();
+        editInterpretationBtn.disabled=true;
+        execSummaryBtn.disabled=false;
+        fullReportBtn.disabled=false;
         statsContent.dataset.computed='';
         statsContent.innerHTML='<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the current view.</p>';
         if(resultsChart){resultsChart.destroy();resultsChart=null;}
@@ -1367,6 +1427,8 @@
         exportPngBtn.classList.toggle('hidden',isBE);
         radarDisclaimer.classList.toggle('hidden',currentView!=='radar');
         document.getElementById('line-chart-hint')?.classList.toggle('hidden',currentView!=='metric');
+        chartTypeWrap.classList.toggle('hidden',currentView!=='metric');
+        syncChartTypeButtons();
 
         if(currentView==='metric'){
             const sel=metricSelect.value; if(!sel){destroyChart();summaryTableContainer.innerHTML='<p style="font-size:12px;color:var(--text3);">Select a metric.</p>';return;}
@@ -1383,7 +1445,12 @@
         statsContent.dataset.computed='';
         statsContent.innerHTML='<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the current view.</p>';
         interpretationOutput.innerHTML='Click a button to generate an AI-powered clinical interpretation.';
+        lastInterpretationRaw='';
+        leaveInterpretationEditView();
+        editInterpretationBtn.disabled=true;
         interpretationButton.disabled=false;
+        execSummaryBtn.disabled=false;
+        fullReportBtn.disabled=false;
         document.getElementById('interpret-button-text').textContent='Interpret View';
     }
 
@@ -1461,7 +1528,16 @@
         const ctx=chartCanvas.getContext('2d');
         if(analysis.type==='line'){
             const metricKey=analysis.metric;
-            resultsChart=new Chart(ctx,{type:'line',data:analysis.chartData,options:{
+            const chartJsType=metricChartStyle==='bar'?'bar':'line';
+            const chartData={
+                labels:analysis.chartData.labels,
+                datasets:analysis.chartData.datasets.map(ds=>{
+                    const copy={...ds};
+                    if(chartJsType==='bar'){copy.borderRadius=4;copy.borderWidth=1;}
+                    return copy;
+                })
+            };
+            resultsChart=new Chart(ctx,{type:chartJsType,data:chartData,options:{
                 responsive:true,maintainAspectRatio:false,
                 interaction:{mode:'index',intersect:false},
                 onClick:(event,elements,chart)=>{
@@ -1475,7 +1551,7 @@
                     title:{display:true,text:analysis.numFiles>1?`${analysis.metric} — Multi-session`:analysis.metric,font:{size:14,weight:'600'},color:'#e6edf3'},
                     legend:{labels:{color:'#8b949e',font:{size:11}}},
                     tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y!=null?ctx.parsed.y.toFixed(3):'N/A'}`}},
-                    datalabels:{display:ctx=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return!!pointAnnotations[k];},formatter:(v,ctx)=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return pointAnnotations[k]||'';},anchor:'end',align:'top',offset:4,font:{size:10},color:'#8b949e'}
+                    datalabels:{display:ctx=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return!!pointAnnotations[k];},formatter:(v,ctx)=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return pointAnnotations[k]||'';},anchor:'end',align:'top',offset:chartJsType==='bar'?2:4,font:{size:10},color:'#8b949e'}
                 },
                 scales:{y:{beginAtZero:true,title:{display:true,text:'Value',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.6)'},ticks:{color:'#8b949e'}},x:{title:{display:true,text:'Test Condition',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.4)'},ticks:{color:'#8b949e'}}}
             }});
@@ -1634,43 +1710,108 @@
         const a=document.createElement('a');a.href=resultsChart.toBase64Image('image/png',1.0);a.download=`posturography_${currentView}_${new Date().toISOString().slice(0,10)}.png`;a.click();
     });
 
+    function buildPosturographyReportDump() {
+        const tests = sortTestConditions(Array.from(allTestConditions));
+        const metrics = Array.from(allMetrics).filter(m => m !== 'Test Status' && m !== 'Stability Class').sort();
+        let diag;
+        try { diag = computeAllDiagnostics(); } catch (e2) { diag = null; }
+        let dump = `POSTUROGRAPHY FULL REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n\n`;
+        tests.forEach(tk => {
+            dump += `=== ${tk} ===\n`;
+            if (diag?.multivariate?.[tk]?.comment) dump += `  [PCA] ${diag.multivariate[tk].comment}\n`;
+            metrics.forEach(m => {
+                const vals = allParsedData.map(d => d.tests[tk]?.metrics[m]);
+                if (!vals.some(v => v !== undefined)) return;
+                const nums = numSeries(vals);
+                const ds = descStats(nums);
+                dump += `  ${m}: ${allParsedData.map((d, i) => { const v = vals[i]; return v !== undefined ? `${getLabel(d)}=${typeof v === 'number' ? v.toFixed(3) : v}` : null; }).filter(Boolean).join(' | ')}`;
+                if (ds) {
+                    dump += ` | mean=${ds.mean.toFixed(3)} SD=${ds.sd !== undefined ? ds.sd.toFixed(3) : 'N/A'} CV=${ds.cv !== undefined ? ds.cv.toFixed(1) + '%' : 'N/A'}`;
+                    if (diag?.inferential?.[tk]?.[m]?.earlyLateComment) dump += ` | ${diag.inferential[tk][m].earlyLateComment}`;
+                }
+                dump += `\n`;
+                if (allParsedData.length === 2 && vals[0] !== undefined && vals[1] !== undefined && typeof vals[0] === 'number') {
+                    const ch = vals[1] - vals[0], pct = vals[0] !== 0 ? (ch / vals[0] * 100).toFixed(1) : 'N/A';
+                    const dir = RADAR_KEY_METRICS[m];
+                    const status = dir ? (dir === 'high' ? ch > 0 : ch < 0) ? '[IMPROVED]' : '[WORSENED]' : '';
+                    dump += `    → ${ch > 0 ? '+' : ''}${ch.toFixed(3)} (${ch > 0 ? '+' : ''}${pct}%) ${status}\n`;
+                }
+            });
+            if (diag?.correlation?.[tk]?.length) { dump += `  [Correlations]\n`; diag.correlation[tk].forEach(c => dump += `    ${c.comment}\n`); }
+            if (diag?.regression?.[tk]?.length) { dump += `  [Regression]\n`; diag.regression[tk].forEach(r => dump += `    ${r.comment}\n`); }
+            if (diag?.longitudinal?.[tk] && Object.keys(diag.longitudinal[tk]).length) {
+                dump += `  [Longitudinal]\n`;
+                Object.keys(diag.longitudinal[tk]).forEach(m => dump += `    ${diag.longitudinal[tk][m].comment}\n`);
+            }
+            dump += `\n`;
+        });
+        return dump;
+    }
+
     // ---- Full Report ----
     fullReportBtn.addEventListener('click', generateFullReport);
+    execSummaryBtn.addEventListener('click', generateExecutiveSummary);
+
+    editInterpretationBtn.addEventListener('click', () => {
+        if (!lastInterpretationRaw.trim()) return;
+        interpretationEditMode = true;
+        editInterpretationBtn.classList.add('hidden');
+        saveEditBtn.classList.remove('hidden');
+        cancelEditBtn.classList.remove('hidden');
+        fullReportBtn.disabled = true;
+        interpretationButton.disabled = true;
+        execSummaryBtn.disabled = true;
+        interpretationOutput.innerHTML = `<textarea id="interpretation-editor" spellcheck="true" style="width:100%;min-height:220px;padding:12px;font-size:13px;font-family:inherit;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);resize:vertical;line-height:1.5;">${escapeHtml(lastInterpretationRaw)}</textarea>`;
+        document.getElementById('interpretation-editor')?.focus();
+    });
+
+    saveEditBtn.addEventListener('click', () => {
+        const ta = document.getElementById('interpretation-editor');
+        if (ta) setInterpretationMarkdown(ta.value);
+        leaveInterpretationEditView();
+        fullReportBtn.disabled = false;
+        interpretationButton.disabled = false;
+        execSummaryBtn.disabled = false;
+        editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
+    });
+
+    cancelEditBtn.addEventListener('click', () => {
+        leaveInterpretationEditView();
+        interpretationOutput.innerHTML = renderMd(lastInterpretationRaw);
+        fullReportBtn.disabled = false;
+        interpretationButton.disabled = false;
+        execSummaryBtn.disabled = false;
+        editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
+    });
+
+    chartLineBtn.addEventListener('click', () => {
+        metricChartStyle = 'line';
+        syncChartTypeButtons();
+        if (currentView === 'metric' && metricSelect.value) {
+            const a = analyzeMetricData(metricSelect.value);
+            updateChart(a);
+        }
+    });
+    chartBarBtn.addEventListener('click', () => {
+        metricChartStyle = 'bar';
+        syncChartTypeButtons();
+        if (currentView === 'metric' && metricSelect.value) {
+            const a = analyzeMetricData(metricSelect.value);
+            updateChart(a);
+        }
+    });
 
     async function generateFullReport(){
+        flushInterpretationEditBeforeGenerate();
         fullReportBtn.disabled=true;
+        execSummaryBtn.disabled=true;
+        interpretationButton.disabled=true;
+        editInterpretationBtn.disabled=true;
         document.getElementById('full-report-btn-text').textContent='Generating…';
         document.getElementById('full-report-loading').classList.remove('hidden');
         interpretationOutput.textContent='Generating comprehensive report…';
 
-        const tests=sortTestConditions(Array.from(allTestConditions));
-        const metrics=Array.from(allMetrics).filter(m=>m!=='Test Status'&&m!=='Stability Class').sort();
-        const KEY=['Stability Score','Fatigue Ratio','Adaptation Ratio','Sway Path Length','Sway Velocity (Ave)','Area 95% Conf. Ellipse'];
-
-        let diag;
-        try { diag = computeAllDiagnostics(); } catch(e2) { diag = null; }
-
-        let dump=`POSTUROGRAPHY FULL REPORT\nSessions: ${allParsedData.map(d=>getLabel(d)).join(' → ')}\n\n`;
-
-        tests.forEach(tk=>{
-            dump+=`=== ${tk} ===\n`;
-            if(diag?.multivariate?.[tk]?.comment) dump+=`  [PCA] ${diag.multivariate[tk].comment}\n`;
-            metrics.forEach(m=>{
-                const vals=allParsedData.map(d=>d.tests[tk]?.metrics[m]);
-                if(!vals.some(v=>v!==undefined))return;
-                const nums=numSeries(vals);
-                const ds=descStats(nums);
-                dump+=`  ${m}: ${allParsedData.map((d,i)=>{const v=vals[i];return v!==undefined?`${getLabel(d)}=${typeof v==='number'?v.toFixed(3):v}`:null;}).filter(Boolean).join(' | ')}`;
-                if(ds){dump+=` | mean=${ds.mean.toFixed(3)} SD=${ds.sd!==undefined?ds.sd.toFixed(3):'N/A'} CV=${ds.cv!==undefined?ds.cv.toFixed(1)+'%':'N/A'}`;
-                if(diag?.inferential?.[tk]?.[m]?.earlyLateComment)dump+=` | ${diag.inferential[tk][m].earlyLateComment}`;}
-                dump+=`\n`;
-                if(allParsedData.length===2&&vals[0]!==undefined&&vals[1]!==undefined&&typeof vals[0]==='number'){const ch=vals[1]-vals[0],pct=vals[0]!==0?(ch/vals[0]*100).toFixed(1):'N/A';const dir=RADAR_KEY_METRICS[m];const status=dir?(dir==='high'?ch>0:ch<0)?'[IMPROVED]':'[WORSENED]':'';dump+=`    → ${ch>0?'+':''}${ch.toFixed(3)} (${ch>0?'+':''}${pct}%) ${status}\n`;}
-            });
-            if(diag?.correlation?.[tk]?.length){dump+=`  [Correlations]\n`;diag.correlation[tk].forEach(c=>dump+=`    ${c.comment}\n`);}
-            if(diag?.regression?.[tk]?.length){dump+=`  [Regression]\n`;diag.regression[tk].forEach(r=>dump+=`    ${r.comment}\n`);}
-            if(diag?.longitudinal?.[tk]&&Object.keys(diag.longitudinal[tk]).length){dump+=`  [Longitudinal]\n`;Object.keys(diag.longitudinal[tk]).forEach(m=>dump+=`    ${diag.longitudinal[tk][m].comment}\n`);}
-            dump+=`\n`;
-        });
+        const dump = buildPosturographyReportDump();
 
         const sys=`You are a clinical expert in vestibular and balance disorders with deep expertise in computerized dynamic posturography (CDP).
 Provide a comprehensive structured interpretation.
@@ -1680,14 +1821,63 @@ Be professional and evidence-based. Do not diagnose.`;
 
         try {
             const text=await callAI(sys,`Interpret the following posturography data:\n\n${dump}`);
-            interpretationOutput.innerHTML=renderMd(text);
+            setInterpretationMarkdown(text);
         } catch(e){
             interpretationOutput.textContent=`Error: ${e.message}`;
+            lastInterpretationRaw='';
+            editInterpretationBtn.disabled=true;
         } finally {
             fullReportBtn.disabled=false;
+            execSummaryBtn.disabled=false;
+            interpretationButton.disabled=false;
+            editInterpretationBtn.disabled=!lastInterpretationRaw.trim();
             document.getElementById('full-report-btn-text').textContent='Full Report';
             document.getElementById('full-report-loading').classList.add('hidden');
             interpretationOutput.scrollIntoView({behavior:'smooth',block:'nearest'});
+        }
+    }
+
+    async function generateExecutiveSummary(){
+        flushInterpretationEditBeforeGenerate();
+        execSummaryBtn.disabled=true;
+        fullReportBtn.disabled=true;
+        interpretationButton.disabled=true;
+        editInterpretationBtn.disabled=true;
+        document.getElementById('exec-summary-btn-text').textContent='Generating…';
+        document.getElementById('exec-summary-loading').classList.remove('hidden');
+        interpretationOutput.textContent='Generating executive summary…';
+
+        const dump = buildPosturographyReportDump();
+
+        const sys = `You are a medical communication specialist helping physicians interpret balance (posturography) test results.
+
+Write an executive summary at approximately a 12th-grade reading level. Use clear, plain language and avoid unnecessary medical jargon; if a technical term is essential, define it briefly.
+
+Maintain a professional, clinician-facing tone. Do NOT address the patient directly (avoid phrases like "your results show"). Instead, use objective phrasing such as "The data indicates..." or "The results suggest...".
+
+Focus on what the numerical results imply about balance and stability across conditions and sessions. Do not diagnose or name specific diseases. Do not add or infer data beyond what is provided.
+
+Structure the response with short titled sections:
+- Overview
+- Main Findings
+- Session/Condition Patterns (if relevant)
+- What to Consider Next (non-diagnostic)`;
+
+        try {
+            const text = await callAI(sys, `Create an executive summary for clinicians from this posturography report:\n\n${dump}`);
+            setInterpretationMarkdown(text);
+        } catch (e) {
+            interpretationOutput.textContent = `Error: ${e.message}`;
+            lastInterpretationRaw = '';
+            editInterpretationBtn.disabled = true;
+        } finally {
+            execSummaryBtn.disabled = false;
+            fullReportBtn.disabled = false;
+            interpretationButton.disabled = false;
+            editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
+            document.getElementById('exec-summary-btn-text').textContent = 'Executive Summary';
+            document.getElementById('exec-summary-loading').classList.add('hidden');
+            interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     }
 
@@ -1695,26 +1885,30 @@ Be professional and evidence-based. Do not diagnose.`;
     interpretationButton.addEventListener('click', getInterpretation);
 
     async function getInterpretation(){
+        flushInterpretationEditBeforeGenerate();
         interpretationButton.disabled=true;
+        fullReportBtn.disabled=true;
+        execSummaryBtn.disabled=true;
+        editInterpretationBtn.disabled=true;
         document.getElementById('interpret-button-text').textContent='Generating…';
         document.getElementById('interpret-icon').classList.add('hidden');
         document.getElementById('interpret-loading').classList.remove('hidden');
         interpretationOutput.textContent='Analyzing…';
 
         const table=summaryTableContainer.querySelector('table');
-        if(!table){interpretationOutput.textContent='No data. Load files first.';resetInterpretBtn();return;}
+        if(!table){interpretationOutput.textContent='No data. Load files first.';lastInterpretationRaw='';resetInterpretBtn();return;}
         const summaryText=Array.from(table.querySelectorAll('tr')).map(tr=>Array.from(tr.querySelectorAll('th,td')).map(c=>c.textContent.trim()).join(' | ')).join('\n').trim();
 
         let sys='',query='';
         if(currentView==='metric'){
-            const m=metricSelect.value;if(!m){interpretationOutput.textContent='Select a metric first.';resetInterpretBtn();return;}
+            const m=metricSelect.value;if(!m){interpretationOutput.textContent='Select a metric first.';lastInterpretationRaw='';resetInterpretBtn();return;}
             const tests=sortTestConditions(Array.from(allTestConditions));
             const sdRows=tests.map(tk=>{const ds=descStats(numSeries(getSeriesFor(tk,m)));return ds?.sd!=null?{tk,sd:ds.sd,cv:ds.cv}:null;}).filter(Boolean).sort((a,b)=>b.sd-a.sd);
             const sdNote=sdRows.length?`\n[SD Analysis]\nHighest variability: ${sdRows[0].tk} (SD=${sdRows[0].sd.toFixed(3)}, CV=${sdRows[0].cv?.toFixed(1)}%)\nLowest variability: ${sdRows[sdRows.length-1].tk} (SD=${sdRows[sdRows.length-1].sd.toFixed(3)}, CV=${sdRows[sdRows.length-1].cv?.toFixed(1)}%)`:'\n[No SD data]';
             sys=`You are a clinical expert in vestibular and balance disorders. Analyze posturography data for: ${m}. Comment explicitly on SD consistency/inconsistency across test conditions and sessions. Be concise. Start: "Interpretation: ${m}"`;
             query=`Data:\n${summaryText}\n${sdNote}`;
         } else if(currentView==='radar'){
-            const t=testSelect.value;if(!t){interpretationOutput.textContent='Select a test condition.';resetInterpretBtn();return;}
+            const t=testSelect.value;if(!t){interpretationOutput.textContent='Select a test condition.';lastInterpretationRaw='';resetInterpretBtn();return;}
             sys=`You are a clinical expert in vestibular and balance disorders. Analyze the comprehensive profile for: ${t}. Comment on SD and variability where relevant. Be concise. Start: "Profile: ${t}"`;
             query=`Data:\n${summaryText}`;
         } else if(currentView==='birdsEye'){
@@ -1727,9 +1921,11 @@ Be professional and evidence-based. Do not diagnose.`;
 
         try {
             const result=await callAI(sys,query);
-            interpretationOutput.innerHTML=renderMd(result);
+            setInterpretationMarkdown(result);
         } catch(e){
             interpretationOutput.textContent=`Error: ${e.message}`;
+            lastInterpretationRaw='';
+            editInterpretationBtn.disabled=true;
         } finally {
             resetInterpretBtn();
             interpretationOutput.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -1738,6 +1934,9 @@ Be professional and evidence-based. Do not diagnose.`;
 
     function resetInterpretBtn(){
         interpretationButton.disabled=false;
+        fullReportBtn.disabled=false;
+        execSummaryBtn.disabled=false;
+        editInterpretationBtn.disabled=!lastInterpretationRaw.trim();
         document.getElementById('interpret-button-text').textContent='Interpret View';
         document.getElementById('interpret-icon').classList.remove('hidden');
         document.getElementById('interpret-loading').classList.add('hidden');
