@@ -1,10 +1,24 @@
 services:
+  # Python VNG parser — Node proxies /api/vng/parse here (see server.js VNG_PARSE_URL)
+  vng-backend:
+    build:
+      context: ./backend
+    image: vng-backend
+    expose:
+      - "8000"
+    restart: unless-stopped
+
   posturography-analyzer:
     build:
       context: .
-    image: posturography-analyzer
+    image: vng-analyzer
     ports:
       - "3000:3000"
     env_file:
       - .env
+    environment:
+      # Inside Docker, 127.0.0.1 is this container — use the backend service name
+      VNG_PARSE_URL: http://vng-backend:8000/parse-vng
+    depends_on:
+      - vng-backend
     restart: unless-stopped

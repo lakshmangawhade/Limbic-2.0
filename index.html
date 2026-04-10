@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Posturography Analyzer</title>
+    <title>VNG Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
@@ -207,7 +207,7 @@
             <div style="width:32px;height:32px;background:var(--accent2);border-radius:8px;display:flex;align-items:center;justify-content:center;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M9 17v-2m3 2v-4m3 4v-6"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
             </div>
-            <h1 style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px;">Posturography Analysis Dashboard</h1>
+            <h1 style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px;">VNG Analysis Dashboard</h1>
         </div>
         <p style="font-size:13px;color:var(--text3);margin-left:44px;">Statistical diagnostics · Clinical interpretation · Multi-session comparison</p>
     </header>
@@ -225,10 +225,10 @@
                 </div>
                 <div style="padding:14px;">
                     <div id="file-upload-area" class="rounded-lg p-6 text-center" style="border-radius:8px;">
-                        <input type="file" id="file-input" multiple accept=".pdf" class="hidden">
+                        <input type="file" id="file-input" multiple accept=".pdf,application/pdf" class="hidden" title="Select up to 10 PDF files">
                         <svg style="width:36px;height:36px;color:var(--text3);margin:0 auto 8px;" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2H4a2 2 0 01-2-2z" /></svg>
                         <p style="font-size:12px;color:var(--text3);"><span style="color:var(--accent);font-weight:500;">Click to upload</span> or drag &amp; drop</p>
-                        <p style="font-size:11px;color:var(--text3);margin-top:3px;">CAPS EQ PDF reports</p>
+                        <p style="font-size:11px;color:var(--text3);margin-top:3px;">Up to 10 VNG PDF reports per upload</p>
                     </div>
                     <p id="file-list-helper" class="hidden" style="font-size:11px;color:var(--text3);margin-top:10px;">Select PDFs, drag to reorder sessions.</p>
                     <div id="file-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
@@ -249,29 +249,25 @@
                     <div>
                         <label>Analysis Mode</label>
                         <select id="analysis-mode-select">
-                            <option value="metric">Metric Comparison</option>
-                            <option value="radar">Comprehensive View (Radar)</option>
-                            <option value="birdsEye">Birds Eye (Heatmap)</option>
-                            <option value="cop">COP Scatter Plot</option>
+                            <option value="metric">Trend by Session</option>
+                            <option value="radar">Test Profile (Radar)</option>
                         </select>
                     </div>
-                    <div id="metric-controls">
-                        <label>Select Metric</label>
+                    <div>
+                        <div>
+                            <label>Test Name</label>
+                            <select id="test-select"></select>
+                        </div>
+                    </div>
+                    <div>
+                        <label>Field Name</label>
                         <select id="metric-select"></select>
                     </div>
                     <div id="radar-controls" class="hidden" style="display:flex;flex-direction:column;gap:10px;">
                         <div>
-                            <label>Test Condition</label>
-                            <select id="test-select"></select>
-                        </div>
-                        <div>
-                            <label>Radar Metrics</label>
+                            <label>Profile Fields</label>
                             <div id="radar-metric-selector" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;"></div>
                         </div>
-                    </div>
-                    <div id="cop-controls" class="hidden">
-                        <label>Test Condition</label>
-                        <select id="cop-test-select"></select>
                     </div>
                 </div>
             </div>
@@ -284,7 +280,7 @@
             <div id="placeholder" class="panel" style="padding:60px 24px; text-align:center;">
                 <svg style="width:48px;height:48px;color:var(--text3);margin:0 auto 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m-9 4H5l-2 2h2m10 0h2l2 2h-2m-4-4l-1.414-1.414A2 2 0 0011.172 10H10a2 2 0 00-2 2v4a2 2 0 002 2h1.172a2 2 0 001.414-.586L14 14m-4-4V7a2 2 0 012-2h2a2 2 0 012 2v3"></path></svg>
                 <h3 style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Waiting for data</h3>
-                <p style="font-size:13px;color:var(--text3);">Upload CAPS EQ PDF reports to begin analysis.</p>
+                <p style="font-size:13px;color:var(--text3);">Upload VNG PDF reports to begin analysis.</p>
             </div>
 
             <!-- Loading -->
@@ -293,7 +289,7 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <p style="font-size:13px;color:var(--text3);">Parsing PDFs…</p>
+                <p style="font-size:13px;color:var(--text3);">Parsing VNG reports…</p>
             </div>
 
             <!-- Results -->
@@ -409,7 +405,8 @@
 <script type="module">
     if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
     const AI_REQUEST_DEFAULTS = { maxTokens: 3000 };
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const VNG_PARSE_ENDPOINT = '/api/vng/parse';
+    const MAX_UPLOAD_FILES = 10;
 
     let allParsedData = [];
     let uploadedParsedData = [];
@@ -475,12 +472,9 @@
     const resetButton = document.getElementById('reset-button');
     const controlsSection = document.getElementById('controls-section');
     const analysisModeSelect = document.getElementById('analysis-mode-select');
-    const metricControls = document.getElementById('metric-controls');
     const metricSelect = document.getElementById('metric-select');
     const radarControls = document.getElementById('radar-controls');
     const testSelect = document.getElementById('test-select');
-    const copControls = document.getElementById('cop-controls');
-    const copTestSelect = document.getElementById('cop-test-select');
     const radarMetricSelector = document.getElementById('radar-metric-selector');
     const placeholder = document.getElementById('placeholder');
     const loading = document.getElementById('loading');
@@ -1174,7 +1168,7 @@
         pointAnnotations={}; currentView='metric'; analysisModeSelect.value='metric';
         fileInput.value=''; fileList.innerHTML='';
         controlsSection.classList.add('hidden');
-        metricControls.classList.remove('hidden'); radarControls.classList.add('hidden'); copControls.classList.add('hidden');
+        radarControls.classList.add('hidden');
         resultsSection.classList.add('hidden'); placeholder.classList.remove('hidden'); loading.classList.add('hidden');
         fileListHelper.classList.add('hidden'); fileActionButtons.style.display='none';
         interpretationOutput.textContent='Click a button to generate an AI-powered clinical interpretation.';
@@ -1192,16 +1186,14 @@
 
     analysisModeSelect.addEventListener('change', e => {
         currentView=e.target.value;
-        metricControls.classList.toggle('hidden', currentView!=='metric');
         radarControls.classList.toggle('hidden', currentView!=='radar');
-        copControls.classList.toggle('hidden', currentView!=='cop');
         radarDisclaimer.classList.toggle('hidden', currentView!=='radar');
         document.getElementById('line-chart-hint')?.classList.toggle('hidden', currentView!=='metric');
+        if(currentView==='radar') populateRadarMetricSelector();
         displayResults();
     });
     metricSelect.addEventListener('change', displayResults);
-    testSelect.addEventListener('change', displayResults);
-    copTestSelect.addEventListener('change', displayResults);
+    testSelect.addEventListener('change', () => { populateMetricSelect(); populateRadarMetricSelector(); displayResults(); });
 
     function updateFileActionButtonsState() {
         const sel=uploadedParsedData.filter(d=>d.selected!==false).length;
@@ -1227,32 +1219,161 @@
             controlsSection.classList.add('hidden'); resultsSection.classList.add('hidden'); placeholder.classList.remove('hidden');
             return;
         }
-        populateMetricSelect(); populateTestSelect(); populateCOPTestSelect(); populateRadarMetricSelector();
+        populateTestSelect(); populateMetricSelect(); populateRadarMetricSelector();
         displayResults();
+    }
+
+    function filterPdfFilesForUpload(fileList) {
+        const all = Array.from(fileList).filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf' || f.type === '');
+        const truncated = all.length > MAX_UPLOAD_FILES;
+        return { files: all.slice(0, MAX_UPLOAD_FILES), truncated, ignoredNonPdf: Array.from(fileList).length - all.length };
+    }
+
+    function prependFileListNotices(truncated, ignoredNonPdf) {
+        if (!truncated && !(ignoredNonPdf > 0)) return;
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'margin-bottom:8px;';
+        if (truncated) {
+            wrap.innerHTML += `<p style="font-size:11px;color:var(--orange);margin-bottom:4px;">Only the first ${MAX_UPLOAD_FILES} PDFs were used (maximum ${MAX_UPLOAD_FILES} per upload).</p>`;
+        }
+        if (ignoredNonPdf > 0) {
+            wrap.innerHTML += `<p style="font-size:11px;color:var(--text3);">${ignoredNonPdf} non-PDF file(s) skipped.</p>`;
+        }
+        fileList.insertBefore(wrap, fileList.firstChild);
     }
 
     async function handleFiles(files) {
         if(!files.length) return;
+        const { files: pdfFiles, truncated, ignoredNonPdf } = filterPdfFilesForUpload(files);
+        if(!pdfFiles.length){
+            placeholder.classList.remove('hidden');
+            loading.classList.add('hidden');
+            fileList.innerHTML='<p style="font-size:12px;color:var(--red);">No PDF files selected. Only .pdf files are accepted.</p>';
+            fileListHelper.classList.remove('hidden');
+            return;
+        }
         placeholder.classList.add('hidden'); loading.classList.remove('hidden');
         resultsSection.classList.add('hidden'); uploadedParsedData=[]; allParsedData=[]; allMetrics=new Set(); allTestConditions=new Set();
         fileList.innerHTML='';
-        const fileArray=Array.from(files);
         try {
-            const results=await Promise.all(fileArray.map(f=>readFileAsPDF(f).then(buf=>parsePDFData(buf,f.name))));
+            const results = await uploadAndParseVngFiles(pdfFiles);
             results.forEach(p=>{if(p){p.selected=true;p.label=p.fileName.replace(/\.pdf$/i,'');uploadedParsedData.push(p);}});
             if(uploadedParsedData.length>0){
                 uploadedParsedData.sort((a,b)=>a.date-b.date);
-                buildFileList(); fileListHelper.classList.remove('hidden');
+                buildFileList();
+                prependFileListNotices(truncated, ignoredNonPdf);
+                fileListHelper.classList.remove('hidden');
                 fileActionButtons.style.display='flex'; updateFileActionButtonsState();
             } else {
                 placeholder.classList.remove('hidden');
-                fileList.innerHTML='<p style="font-size:12px;color:var(--red);">No valid posturography data found.</p>';
+                fileList.innerHTML='<p style="font-size:12px;color:var(--red);">No valid VNG data found.</p>';
             }
         } catch(err) {
             console.error(err);
             fileList.innerHTML=`<p style="font-size:12px;color:var(--red);">Error: ${err.message}</p>`;
             placeholder.classList.remove('hidden');
         } finally { loading.classList.add('hidden'); }
+    }
+
+    function unwrapVngPayload(payload) {
+        if (!payload || typeof payload !== 'object') return [];
+        if (Array.isArray(payload)) return payload;
+        if (Array.isArray(payload.sessions)) return payload.sessions;
+        if (Array.isArray(payload.results)) return payload.results;
+        if (payload.pdf_name != null || Array.isArray(payload.ocr_tables)) return [payload];
+        return [];
+    }
+
+    function parseVngNumeric(raw) {
+        if (raw === null || raw === undefined) return NaN;
+        if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+        const s = String(raw).trim().replace(/,/g, '');
+        const m = s.match(/-?\d+(\.\d+)?/);
+        if (!m) return NaN;
+        return parseFloat(m[0]);
+    }
+
+    async function uploadAndParseVngFiles(files) {
+        const form = new FormData();
+        files.forEach(f => form.append('files', f, f.name));
+        const response = await fetch(VNG_PARSE_ENDPOINT, { method: 'POST', body: form });
+        if (!response.ok) {
+            const errPayload = await response.json().catch(() => ({}));
+            throw new Error(errPayload?.error?.message || errPayload?.detail || `VNG parse failed (HTTP ${response.status})`);
+        }
+        const payload = await response.json();
+        const items = unwrapVngPayload(payload);
+        return normalizeVngSessions(items);
+    }
+
+    function normalizeVngSessions(items) {
+        return items.map((raw, idx) => {
+            const fileName =
+                (typeof raw?.pdf_name === 'string' && raw.pdf_name.trim()) ||
+                (typeof raw?.fileName === 'string' && raw.fileName.trim()) ||
+                `session_${idx + 1}.pdf`;
+            const label =
+                (typeof raw?.sessionLabel === 'string' && raw.sessionLabel.trim()) ||
+                fileName.replace(/\.pdf$/i, '');
+            const ts = raw?.processing_timestamp || raw?.date;
+            const date = ts ? new Date(ts) : new Date();
+            const tests = {};
+
+            function ensureTest(name) {
+                if (!tests[name]) tests[name] = { fullName: name, metrics: {}, fieldMeta: {} };
+                return tests[name];
+            }
+
+            const ocrTables = Array.isArray(raw?.ocr_tables) ? raw.ocr_tables : [];
+            ocrTables.forEach(tbl => {
+                const testName = (typeof tbl?.test_name === 'string' && tbl.test_name.trim()) || (typeof tbl?.testName === 'string' && tbl.testName.trim());
+                if (!testName) return;
+                const t = ensureTest(testName);
+                const rows = Array.isArray(tbl?.data) ? tbl.data : [];
+                rows.forEach(row => {
+                    const fieldName =
+                        (typeof row?.field_name === 'string' && row.field_name.trim()) ||
+                        (typeof row?.fieldName === 'string' && row.fieldName.trim());
+                    if (!fieldName) return;
+                    const num = parseVngNumeric(row?.value);
+                    if (Number.isFinite(num)) t.metrics[fieldName] = num;
+                    t.fieldMeta[fieldName] = {
+                        normative_range_low: row?.normative_range_low ?? row?.normativeRangeLow,
+                        normative_range_high: row?.normative_range_high ?? row?.normativeRangeHigh,
+                        within_normative_range: row?.within_normative_range ?? row?.withinNormativeRange
+                    };
+                });
+            });
+
+            const testsInput = Array.isArray(raw?.tests) ? raw.tests : [];
+            testsInput.forEach((testObj, tIdx) => {
+                const testName =
+                    (typeof testObj?.testName === 'string' && testObj.testName.trim()) ||
+                    (typeof testObj?.test_name === 'string' && testObj.test_name.trim()) ||
+                    `Test ${tIdx + 1}`;
+                const t = ensureTest(testName);
+                const fields = Array.isArray(testObj?.fields) ? testObj.fields : [];
+                fields.forEach((fieldObj, fIdx) => {
+                    const fieldName =
+                        (typeof fieldObj?.fieldName === 'string' && fieldObj.fieldName.trim()) ||
+                        (typeof fieldObj?.field_name === 'string' && fieldObj.field_name.trim()) ||
+                        `Field ${fIdx + 1}`;
+                    const num = parseVngNumeric(fieldObj?.value);
+                    if (Number.isFinite(num)) t.metrics[fieldName] = num;
+                    t.fieldMeta[fieldName] = {
+                        normative_range_low: fieldObj?.normative_range_low,
+                        normative_range_high: fieldObj?.normative_range_high,
+                        within_normative_range: fieldObj?.within_normative_range
+                    };
+                });
+            });
+
+            Object.keys(tests).forEach(k => {
+                if (!Object.keys(tests[k].metrics || {}).length) delete tests[k];
+            });
+
+            return { fileName, label, date: isNaN(date.getTime()) ? new Date() : date, tests };
+        }).filter(s => Object.keys(s.tests).length > 0);
     }
 
     function buildFileList() {
@@ -1391,24 +1512,27 @@
 
     // ---- Populate selects ----
     function populateMetricSelect(){
-        metricSelect.innerHTML='<option value="">-- Select Metric --</option>';
-        const sorted=Array.from(allMetrics).sort();
-        const key=['Stability Score','Sway Path Length','Sway Velocity (Ave)','Area 95% Conf. Ellipse'];
-        key.forEach(km=>{if(sorted.includes(km))metricSelect.innerHTML+=`<option value="${km}"${km==='Stability Score'?' selected':''}>${km}</option>`;});
-        sorted.forEach(m=>{if(!key.includes(m))metricSelect.innerHTML+=`<option value="${m}">${m}</option>`;});
+        metricSelect.innerHTML='<option value="">-- Select Field --</option>';
+        const selectedTest = testSelect.value;
+        if(!selectedTest) return;
+        const seen = new Set();
+        allParsedData.forEach(d => {
+            Object.keys(d.tests[selectedTest]?.metrics || {}).forEach(m => seen.add(m));
+        });
+        Array.from(seen).sort().forEach((m, i) => metricSelect.innerHTML += `<option value="${m}" ${i===0?'selected':''}>${m}</option>`);
     }
     function populateTestSelect(){
+        const current = testSelect.value;
         testSelect.innerHTML='';
-        sortTestConditions(Array.from(allTestConditions)).forEach((t,i)=>testSelect.innerHTML+=`<option value="${t}"${i===0?' selected':''}>${t}</option>`);
-    }
-    function populateCOPTestSelect(){
-        copTestSelect.innerHTML='<option value="all">All Tests</option>';
-        sortTestConditions(Array.from(allTestConditions)).forEach(t=>copTestSelect.innerHTML+=`<option value="${t}">${t}</option>`);
+        sortTestConditions(Array.from(allTestConditions)).forEach((t,i)=>testSelect.innerHTML+=`<option value="${t}"${(!current&&i===0)||current===t?' selected':''}>${t}</option>`);
     }
     function populateRadarMetricSelector(){
         radarMetricSelector.innerHTML='';
-        Object.keys(RADAR_KEY_METRICS).forEach(metric=>{
-            if(!allMetrics.has(metric))return;
+        const selectedTest = testSelect.value;
+        if(!selectedTest) return;
+        const metrics = new Set();
+        allParsedData.forEach(d => Object.keys(d.tests[selectedTest]?.metrics || {}).forEach(m => metrics.add(m)));
+        Array.from(metrics).sort().forEach(metric=>{
             const id=`rm-${metric.replace(/[^a-zA-Z0-9]/g,'-')}`;
             const div=document.createElement('div');
             div.style.cssText='display:flex;align-items:center;gap:6px;';
@@ -1422,24 +1546,21 @@
     function displayResults(){
         controlsSection.classList.remove('hidden'); resultsSection.classList.remove('hidden');
         placeholder.classList.add('hidden'); loading.classList.add('hidden');
-        const isBE=currentView==='birdsEye';
-        chartContainer.classList.toggle('hidden',isBE); birdsEyeContainer.classList.toggle('hidden',!isBE);
-        exportPngBtn.classList.toggle('hidden',isBE);
+        chartContainer.classList.remove('hidden'); birdsEyeContainer.classList.add('hidden');
+        exportPngBtn.classList.remove('hidden');
         radarDisclaimer.classList.toggle('hidden',currentView!=='radar');
         document.getElementById('line-chart-hint')?.classList.toggle('hidden',currentView!=='metric');
         chartTypeWrap.classList.toggle('hidden',currentView!=='metric');
         syncChartTypeButtons();
 
         if(currentView==='metric'){
-            const sel=metricSelect.value; if(!sel){destroyChart();summaryTableContainer.innerHTML='<p style="font-size:12px;color:var(--text3);">Select a metric.</p>';return;}
-            const a=analyzeMetricData(sel);updateChart(a);updateTable(a);
+            const selectedTest=testSelect.value;
+            const sel=metricSelect.value;
+            if(!selectedTest || !sel){destroyChart();summaryTableContainer.innerHTML='<p style="font-size:12px;color:var(--text3);">Select test and field.</p>';return;}
+            const a=analyzeMetricData(selectedTest, sel);updateChart(a);updateTable(a);
         } else if(currentView==='radar'){
             const sel=testSelect.value; if(!sel){destroyChart();return;}
             const a=analyzeRadarData(sel);updateChart(a);updateTable(a);
-        } else if(currentView==='birdsEye'){
-            renderBirdsEye();
-        } else if(currentView==='cop'){
-            renderCOPScatter();
         }
         // Reset stats panel
         statsContent.dataset.computed='';
@@ -1458,46 +1579,44 @@
 
     function calcStats(values){const m=values.reduce((a,b)=>a+b,0)/values.length;const sd=Math.sqrt(values.map(x=>(x-m)**2).reduce((a,b)=>a+b,0)/values.length);return{mean:m,stdDev:sd};}
 
-    function analyzeMetricData(metric){
+    function analyzeMetricData(testName, metric){
         const nf=allParsedData.length;
         const labels=allParsedData.map(d=>getLabel(d).length>22?'…'+getLabel(d).slice(-19):getLabel(d));
-        const commonTests=new Set();
-        allParsedData.forEach(d=>Object.keys(d.tests).forEach(k=>{if(d.tests[k].metrics[metric]!==undefined)commonTests.add(k);}));
-        const sorted=sortTestConditions(Array.from(commonTests));
-        const tableData={header:['Metric','Test',...labels],rows:[]};
+        const sorted=['Value'];
+        const tableData={header:['Test','Field',...labels],rows:[]};
         if(nf===2)tableData.header.push('Change','% Change');
         else if(nf>2)tableData.header.push('Mean','SD');
         const chartData={labels:sorted,datasets:[]};
 
         if(nf===1){
             const data=[];
-            sorted.forEach(k=>{const v=allParsedData[0].tests[k]?.metrics[metric];data.push(v);tableData.rows.push([metric,k,v]);});
+            sorted.forEach(()=>{const v=allParsedData[0].tests[testName]?.metrics[metric];data.push(v);tableData.rows.push([testName,metric,v]);});
             chartData.datasets.push({label:labels[0],data,fill:false,borderColor:CHART_COLORS[0].border,backgroundColor:CHART_COLORS[0].bg,borderWidth:2,pointRadius:4,pointHoverRadius:6});
         } else if(nf===2){
             const[d1,d2]=[[],[]];
-            sorted.forEach(k=>{
-                const v1=allParsedData[0].tests[k]?.metrics[metric],v2=allParsedData[1].tests[k]?.metrics[metric];
+            sorted.forEach(()=>{
+                const v1=allParsedData[0].tests[testName]?.metrics[metric],v2=allParsedData[1].tests[testName]?.metrics[metric];
                 d1.push(v1);d2.push(v2);
                 let ch='N/A',pct='N/A';
                 if(v1!==undefined&&v2!==undefined){ch=v2-v1;pct=v1!==0?(ch/v1)*100:'N/A';}
-                tableData.rows.push([metric,k,v1,v2,ch,pct]);
+                tableData.rows.push([testName,metric,v1,v2,ch,pct]);
             });
             chartData.datasets.push({label:labels[0],data:d1,fill:false,borderColor:CHART_COLORS[0].border,backgroundColor:CHART_COLORS[0].bg,borderWidth:2,pointRadius:5,pointHoverRadius:7});
             chartData.datasets.push({label:labels[1],data:d2,fill:false,borderColor:CHART_COLORS[1].border,backgroundColor:CHART_COLORS[1].bg,borderWidth:2,pointRadius:5,pointHoverRadius:7});
         } else {
             allParsedData.forEach((fd,i)=>{
-                const data=sorted.map(k=>fd.tests[k]?.metrics[metric]);
+                const data=sorted.map(()=>fd.tests[testName]?.metrics[metric]);
                 chartData.datasets.push({label:labels[i],data,fill:false,borderColor:CHART_COLORS[i%CHART_COLORS.length].border,backgroundColor:CHART_COLORS[i%CHART_COLORS.length].bg,borderWidth:2,pointRadius:4,pointHoverRadius:6});
             });
-            sorted.forEach(k=>{
-                const row=[metric,k];
-                const vals=allParsedData.map(fd=>{const v=fd.tests[k]?.metrics[metric];row.push(v!==undefined?v:'N/A');return v;});
+            sorted.forEach(()=>{
+                const row=[testName,metric];
+                const vals=allParsedData.map(fd=>{const v=fd.tests[testName]?.metrics[metric];row.push(v!==undefined?v:'N/A');return v;});
                 const valid=vals.filter(v=>v!==undefined);
                 if(valid.length>0){const{mean:m,stdDev:s}=calcStats(valid);row.push(m,s);}else row.push('N/A','N/A');
                 tableData.rows.push(row);
             });
         }
-        return{type:'line',chartData,tableData,numFiles:nf,metric};
+        return{type:'line',chartData,tableData,numFiles:nf,metric, testName};
     }
 
     function analyzeRadarData(test){
@@ -1548,7 +1667,7 @@
                     if(comment!==null){if(comment.trim())pointAnnotations[key]=comment.trim();else delete pointAnnotations[key];chart.update();}
                 },
                 plugins:{
-                    title:{display:true,text:analysis.numFiles>1?`${analysis.metric} — Multi-session`:analysis.metric,font:{size:14,weight:'600'},color:'#e6edf3'},
+                    title:{display:true,text:analysis.numFiles>1?`${analysis.testName} · ${analysis.metric} — Multi-session`:`${analysis.testName} · ${analysis.metric}`,font:{size:14,weight:'600'},color:'#e6edf3'},
                     legend:{labels:{color:'#8b949e',font:{size:11}}},
                     tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y!=null?ctx.parsed.y.toFixed(3):'N/A'}`}},
                     datalabels:{display:ctx=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return!!pointAnnotations[k];},formatter:(v,ctx)=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return pointAnnotations[k]||'';},anchor:'end',align:'top',offset:chartJsType==='bar'?2:4,font:{size:10},color:'#8b949e'}
@@ -1703,19 +1822,19 @@
         const table=summaryTableContainer.querySelector('table');if(!table)return;
         const rows=Array.from(table.querySelectorAll('tr')).map(tr=>Array.from(tr.querySelectorAll('th,td')).map(c=>`"${c.textContent.trim().replace(/"/g,'""')}"`).join(','));
         const blob=new Blob([rows.join('\n')],{type:'text/csv'});
-        const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`posturography_${currentView}_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);
+        const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`vng_${currentView}_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);
     });
     exportPngBtn.addEventListener('click',()=>{
         if(!resultsChart)return;
-        const a=document.createElement('a');a.href=resultsChart.toBase64Image('image/png',1.0);a.download=`posturography_${currentView}_${new Date().toISOString().slice(0,10)}.png`;a.click();
+        const a=document.createElement('a');a.href=resultsChart.toBase64Image('image/png',1.0);a.download=`vng_${currentView}_${new Date().toISOString().slice(0,10)}.png`;a.click();
     });
 
-    function buildPosturographyReportDump() {
+    function buildVngReportDump() {
         const tests = sortTestConditions(Array.from(allTestConditions));
         const metrics = Array.from(allMetrics).filter(m => m !== 'Test Status' && m !== 'Stability Class').sort();
         let diag;
         try { diag = computeAllDiagnostics(); } catch (e2) { diag = null; }
-        let dump = `POSTUROGRAPHY FULL REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n\n`;
+        let dump = `VNG FULL REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n\n`;
         tests.forEach(tk => {
             dump += `=== ${tk} ===\n`;
             if (diag?.multivariate?.[tk]?.comment) dump += `  [PCA] ${diag.multivariate[tk].comment}\n`;
@@ -1788,7 +1907,7 @@
         metricChartStyle = 'line';
         syncChartTypeButtons();
         if (currentView === 'metric' && metricSelect.value) {
-            const a = analyzeMetricData(metricSelect.value);
+            const a = analyzeMetricData(testSelect.value, metricSelect.value);
             updateChart(a);
         }
     });
@@ -1796,7 +1915,7 @@
         metricChartStyle = 'bar';
         syncChartTypeButtons();
         if (currentView === 'metric' && metricSelect.value) {
-            const a = analyzeMetricData(metricSelect.value);
+            const a = analyzeMetricData(testSelect.value, metricSelect.value);
             updateChart(a);
         }
     });
@@ -1811,16 +1930,16 @@
         document.getElementById('full-report-loading').classList.remove('hidden');
         interpretationOutput.textContent='Generating comprehensive report…';
 
-        const dump = buildPosturographyReportDump();
+        const dump = buildVngReportDump();
 
-        const sys=`You are a clinical expert in vestibular and balance disorders with deep expertise in computerized dynamic posturography (CDP).
+        const sys=`You are a clinical expert in vestibular diagnostics with expertise in video nystagmography (VNG).
 Provide a comprehensive structured interpretation.
 Structure: Executive Summary → Test-by-Test Analysis → Statistical Highlights (comment on SD consistency/inconsistency, correlations, regressions, and longitudinal trends) → Clinical Implications.
 For any metric where CV>25% or permutation p<0.05, flag it explicitly.
 Be professional and evidence-based. Do not diagnose.`;
 
         try {
-            const text=await callAI(sys,`Interpret the following posturography data:\n\n${dump}`);
+            const text=await callAI(sys,`Interpret the following VNG data:\n\n${dump}`);
             setInterpretationMarkdown(text);
         } catch(e){
             interpretationOutput.textContent=`Error: ${e.message}`;
@@ -1847,9 +1966,9 @@ Be professional and evidence-based. Do not diagnose.`;
         document.getElementById('exec-summary-loading').classList.remove('hidden');
         interpretationOutput.textContent='Generating executive summary…';
 
-        const dump = buildPosturographyReportDump();
+        const dump = buildVngReportDump();
 
-        const sys = `You are a medical communication specialist helping physicians interpret balance (posturography) test results.
+        const sys = `You are a medical communication specialist helping physicians interpret VNG test results.
 
 Write an executive summary at approximately a 12th-grade reading level. Use clear, plain language and avoid unnecessary medical jargon; if a technical term is essential, define it briefly.
 
@@ -1864,7 +1983,7 @@ Structure the response with short titled sections:
 - What to Consider Next (non-diagnostic)`;
 
         try {
-            const text = await callAI(sys, `Create an executive summary for clinicians from this posturography report:\n\n${dump}`);
+            const text = await callAI(sys, `Create an executive summary for clinicians from this VNG report:\n\n${dump}`);
             setInterpretationMarkdown(text);
         } catch (e) {
             interpretationOutput.textContent = `Error: ${e.message}`;
@@ -1905,18 +2024,15 @@ Structure the response with short titled sections:
             const tests=sortTestConditions(Array.from(allTestConditions));
             const sdRows=tests.map(tk=>{const ds=descStats(numSeries(getSeriesFor(tk,m)));return ds?.sd!=null?{tk,sd:ds.sd,cv:ds.cv}:null;}).filter(Boolean).sort((a,b)=>b.sd-a.sd);
             const sdNote=sdRows.length?`\n[SD Analysis]\nHighest variability: ${sdRows[0].tk} (SD=${sdRows[0].sd.toFixed(3)}, CV=${sdRows[0].cv?.toFixed(1)}%)\nLowest variability: ${sdRows[sdRows.length-1].tk} (SD=${sdRows[sdRows.length-1].sd.toFixed(3)}, CV=${sdRows[sdRows.length-1].cv?.toFixed(1)}%)`:'\n[No SD data]';
-            sys=`You are a clinical expert in vestibular and balance disorders. Analyze posturography data for: ${m}. Comment explicitly on SD consistency/inconsistency across test conditions and sessions. Be concise. Start: "Interpretation: ${m}"`;
+            sys=`You are a clinical expert in vestibular diagnostics. Analyze VNG data for field: ${m}. Comment explicitly on SD consistency/inconsistency across sessions for the selected test. Be concise. Start: "Interpretation: ${m}"`;
             query=`Data:\n${summaryText}\n${sdNote}`;
         } else if(currentView==='radar'){
             const t=testSelect.value;if(!t){interpretationOutput.textContent='Select a test condition.';lastInterpretationRaw='';resetInterpretBtn();return;}
-            sys=`You are a clinical expert in vestibular and balance disorders. Analyze the comprehensive profile for: ${t}. Comment on SD and variability where relevant. Be concise. Start: "Profile: ${t}"`;
+            sys=`You are a clinical expert in vestibular diagnostics. Analyze the VNG profile for test: ${t}. Comment on variability across sessions and field patterns. Be concise. Start: "Profile: ${t}"`;
             query=`Data:\n${summaryText}`;
-        } else if(currentView==='birdsEye'){
-            sys=`You are a clinical expert in vestibular and balance disorders. Analyze the birds-eye summary. Identify patterns, flag high-SD metrics as inconsistent, flag low-SD metrics as consistent. Start: "Birds Eye Summary"`;
+        } else {
+            sys=`You are a clinical expert in vestibular diagnostics. Interpret the provided VNG data summary. Keep conclusions evidence-based and non-diagnostic.`;
             query=`Data:\n${summaryText}`;
-        } else if(currentView==='cop'){
-            sys=`You are a clinical expert in vestibular and balance disorders. Interpret COP scatter data. Comment on lateral/AP asymmetry and displacement patterns. Start: "COP Analysis"`;
-            query=`COP data (mm):\n${summaryText}`;
         }
 
         try {

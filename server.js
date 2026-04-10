@@ -54,6 +54,8 @@ const ROOT_DIR = __dirname;
 const ANTHROPIC_API_KEY = normalizeEnvValue(process.env.ANTHROPIC_API_KEY);
 const ANTHROPIC_MODEL = normalizeEnvValue(process.env.ANTHROPIC_MODEL);
 const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const VNG_PARSE_URL = normalizeEnvValue(process.env.VNG_PARSE_URL) || 'http://127.0.0.1:8000/parse-vng';
 
 function sendJson(res, statusCode, payload) {
     res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -197,6 +199,67 @@ function proxyAnthropicRequest(req, res) {
     });
 }
 
+function proxyVngParseRequest(req, res) {
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(VNG_PARSE_URL);
+    } catch {
+        sendJson(res, 500, { error: { message: 'Server VNG_PARSE_URL is invalid.' } });
+        return;
+    }
+
+    const transport = parsedUrl.protocol === 'https:' ? https : http;
+    const headers = {
+        'content-type': req.headers['content-type'] || 'application/octet-stream'
+    };
+    if (req.headers['content-length']) {
+        headers['content-length'] = req.headers['content-length'];
+    }
+
+    const upstreamReq = transport.request({
+        protocol: parsedUrl.protocol,
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+        path: `${parsedUrl.pathname}${parsedUrl.search}`,
+        method: 'POST',
+        headers
+    }, upstreamRes => {
+        let body = '';
+        upstreamRes.on('data', chunk => body += chunk);
+        upstreamRes.on('end', () => {
+            const statusCode = upstreamRes.statusCode || 502;
+            if (statusCode >= 400) {
+                const parsed = parseJsonSafe(body);
+                sendJson(res, statusCode, { error: { message: parsed?.error?.message || parsed?.message || `VNG parser returned HTTP ${statusCode}.` } });
+                return;
+            }
+            let payload = parseJsonSafe(body);
+            if (payload === null) payload = { sessions: [] };
+            sendJson(res, 200, payload);
+        });
+    });
+
+    upstreamReq.on('error', error => {
+        sendJson(res, 502, { error: { message: `VNG backend error: ${error.message}` } });
+    });
+
+    let size = 0;
+    let rejected = false;
+    req.on('data', chunk => {
+        size += chunk.length;
+        if (!rejected && size > MAX_UPLOAD_BYTES) {
+            rejected = true;
+            upstreamReq.destroy();
+            req.destroy();
+            sendJson(res, 413, { error: { message: 'Upload too large. Max 25MB.' } });
+        }
+    });
+    req.on('error', error => {
+        if (!rejected) sendJson(res, 400, { error: { message: error.message } });
+    });
+    if (!rejected) req.pipe(upstreamReq);
+}
+
 http.createServer((req, res) => {
     if (req.method === 'OPTIONS' && req.url === '/api/messages') {
         res.writeHead(204);
@@ -206,6 +269,11 @@ http.createServer((req, res) => {
 
     if (req.method === 'POST' && req.url === '/api/messages') {
         proxyAnthropicRequest(req, res);
+        return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/vng/parse') {
+        proxyVngParseRequest(req, res);
         return;
     }
 
