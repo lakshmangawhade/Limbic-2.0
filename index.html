@@ -1767,6 +1767,48 @@
         }));
     }
 
+    /** Integer x-spacing: each series in one session gets its own x; a gap index separates sessions (Chart.js linear + ticks). */
+    function buildGroupedMetricXLayout(numSessions, numSeries) {
+        if (numSeries <= 1 || numSessions < 1) {
+            return { useShiftedX: false, clusterSpan: 1, pointGap: 1, sessionCenters: [], xMin: 0, xMax: 1 };
+        }
+        const pointGap = 1;
+        const stride = numSeries + 1;
+        const sessionCenters = [];
+        for (let si = 0; si < numSessions; si++) {
+            sessionCenters.push(si * stride + (numSeries - 1) / 2);
+        }
+        const xMin = -0.4;
+        const xMax = (numSessions - 1) * stride + (numSeries - 1) + 0.4;
+        return { useShiftedX: true, clusterSpan: stride, pointGap, sessionGap: 1, sessionCenters, xMin, xMax };
+    }
+
+    function sessionIndexFromGroupedXY(raw, gx, numSeries) {
+        const x = raw && typeof raw.x === 'number' ? raw.x : null;
+        if (x == null || !gx || !gx.useShiftedX) return -1;
+        const n = Math.max(1, numSeries);
+        const stride = gx.clusterSpan;
+        for (let s = 0; s < gx.sessionCenters.length; s++) {
+            const x0 = s * stride;
+            const x1 = x0 + (n - 1) * gx.pointGap;
+            if (x >= x0 - 1e-4 && x <= x1 + 1e-4) return s;
+        }
+        return Math.min(gx.sessionCenters.length - 1, Math.max(0, Math.floor((x + 0.5) / stride)));
+    }
+
+    /** Lookup composite PDF + Hz/deg·s⁻¹ label for a grouped-metric x value (linear axis). */
+    function compositeLabelForGroupedX(x, gx) {
+        if (x == null || !gx?.xTickPairs?.length) return '';
+        const hit = gx.xTickPairs.find(t => Math.abs(t.value - x) < 0.001);
+        return hit ? (hit.fullLabel || hit.label || '') : '';
+    }
+
+    function axisLabelPartsForGroupedX(x, gx) {
+        if (x == null || !gx?.xTickPairs?.length) return '';
+        const hit = gx.xTickPairs.find(t => Math.abs(t.value - x) < 0.001);
+        return hit ? (hit.axisLabelParts || hit.label || '') : '';
+    }
+
     function analyzeMetricData(testName, metric){
         const nf=allParsedData.length;
         const labels=allParsedData.map(d=>{const L=getLabel(d);return L.length>22?'…'+L.slice(-19):L;});
@@ -1781,24 +1823,62 @@
         const chartData={labels,datasets:[]};
 
         const testNameDisp=formatTestNameForDisplay(testName);
+        const nSeries=fieldNames.length;
+        const xLayout=buildGroupedMetricXLayout(nf,nSeries);
+        let groupedXAxis=null;
+        if(isGroup&&xLayout.useShiftedX){
+            const xTickPairs=[];
+            const stride=xLayout.clusterSpan;
+            const pg=xLayout.pointGap;
+            for(let si=0;si<nf;si++){
+                for(let fi=0;fi<nSeries;fi++){
+                    const x=si*stride+fi*pg;
+                    const band=extractGroupLabelFromFieldName(fieldNames[fi]);
+                    let pdfShort=(labels[si]||'').trim()||`S${si+1}`;
+                    if(pdfShort.length>24)pdfShort='…'+pdfShort.slice(-20);
+                    const pdfFull=(fullLabels[si]||pdfShort).trim();
+                    xTickPairs.push({
+                        value:x,
+                        label:`${pdfShort} · ${band}`,
+                        fullLabel:`${pdfFull} · ${band}`,
+                        axisLabelParts:[pdfShort, band]
+                    });
+                }
+            }
+            groupedXAxis={...xLayout,fullLabels,shortLabels:labels,fieldNames,xTickPairs,numSessions:nf};
+        }
         if(isGroup){
             fieldNames.forEach((fn,fi)=>{
-                const data=allParsedData.map(d=>d.tests[testName]?.metrics[fn]);
+                let data;
+                if(xLayout.useShiftedX){
+                    data=allParsedData.map((d,si)=>{
+                        const x=si*xLayout.clusterSpan+fi*xLayout.pointGap;
+                        const y=d.tests[testName]?.metrics[fn];
+                        if(y===undefined||!Number.isFinite(y))return{x,y:null};
+                        return{x,y};
+                    });
+                }else{
+                    data=allParsedData.map(d=>d.tests[testName]?.metrics[fn]);
+                }
                 chartData.datasets.push({
                     label:extractGroupLabelFromFieldName(fn),
-                    data,fill:false,
+                    data,
+                    fill:false,
+                    spanGaps:!!xLayout.useShiftedX,
+                    parsing:xLayout.useShiftedX?{xAxisKey:'x',yAxisKey:'y'}:undefined,
                     borderColor:CHART_COLORS[fi%CHART_COLORS.length].border,
                     backgroundColor:CHART_COLORS[fi%CHART_COLORS.length].bg,
                     borderWidth:2,pointRadius:4,pointHoverRadius:6
                 });
-                const row=[testNameDisp,fn,...data];
+                const rowCells=allParsedData.map(d=>d.tests[testName]?.metrics[fn]);
+                const row=[testNameDisp,fn,...rowCells];
                 if(nf===2){
-                    const v1=data[0],v2=data[1];
+                    const v1=rowCells[0],v2=rowCells[1];
                     let ch='N/A',pct='N/A';
                     if(v1!==undefined&&v2!==undefined){ch=v2-v1;pct=v1!==0?(ch/v1)*100:'N/A';}
                     row.push(ch,pct);
                 } else if(nf>2){
-                    const valid=data.filter(v=>v!==undefined);
+                    const valid=rowCells.filter(v=>v!==undefined);
                     if(valid.length>0){const{mean:m,stdDev:s}=calcStats(valid);row.push(m,s);}else row.push('N/A','N/A');
                 }
                 tableData.rows.push(row);
@@ -1824,7 +1904,7 @@
             }
             tableData.rows.push(row);
         }
-        return{type:'line',chartData,tableData,numFiles:nf,metric,displayMetric,isGroup,testName,displayTestName:testNameDisp};
+        return{type:'line',chartData,tableData,numFiles:nf,metric,displayMetric,isGroup,testName,displayTestName:testNameDisp,groupedXAxis};
     }
 
     function analyzeRadarData(test){
@@ -1863,6 +1943,9 @@
             const tn=analysis.displayTestName||formatTestNameForDisplay(analysis.testName);
             const chartJsType=metricChartStyle==='bar'?'bar':'line';
             const groupedMultiSeries=analysis.isGroup&&analysis.chartData.datasets.length>1;
+            const gx=analysis.groupedXAxis;
+            const useLinearX=!!(gx&&gx.useShiftedX);
+            const nSeriesLine=analysis.chartData?.datasets?.length||1;
             const chartData={
                 labels:analysis.chartData.labels,
                 datasets:analysis.chartData.datasets.map(ds=>{
@@ -1873,10 +1956,66 @@
             };
             const titleText=`${tn} · ${disp}`;
             const barPct=groupedMultiSeries?{categoryPercentage:0.66,barPercentage:0.86}:{categoryPercentage:0.68,barPercentage:0.78};
+            const datasetBarOpts=chartJsType==='bar'
+                ?{bar:useLinearX?{maxBarThickness:26}:barPct}
+                :{};
+            const xScale=useLinearX?{
+                type:'linear',
+                min:gx.xMin,
+                max:gx.xMax,
+                title:{display:true,text:'PDF / session and frequency band',color:'#6e7681'},
+                grid:{color:'rgba(48,54,61,0.4)'},
+                ticks:{
+                    color:'#8b949e',
+                    maxRotation:0,
+                    minRotation:0,
+                    autoSkip:false,
+                    font:{size:9},
+                    callback(value){
+                        return axisLabelPartsForGroupedX(Number(value), gx);
+                    }
+                },
+                afterBuildTicks(scale){
+                    if(gx.xTickPairs&&gx.xTickPairs.length){
+                        scale.ticks=gx.xTickPairs.map(t=>({value:t.value}));
+                    }
+                }
+            }:{
+                title:{display:true,text:'Session / PDF',color:'#6e7681'},
+                grid:{color:'rgba(48,54,61,0.4)'},
+                ticks:{color:'#8b949e'}
+            };
+            const tooltipOpts={
+                mode:useLinearX?'nearest':'index',
+                intersect:false,
+                backgroundColor:'#1c2330',
+                borderColor:'#30363d',
+                borderWidth:1,
+                titleColor:'#e6edf3',
+                bodyColor:'#8b949e',
+                callbacks:{
+                    title(items){
+                        if(!items||!items.length)return'';
+                        if(useLinearX&&gx){
+                            const x=items[0].raw?.x;
+                            const comp=compositeLabelForGroupedX(x,gx);
+                            if(comp)return comp;
+                            const si=sessionIndexFromGroupedXY(items[0].raw,gx,nSeriesLine);
+                            if(si>=0&&gx.fullLabels[si])return gx.fullLabels[si];
+                            return'';
+                        }
+                        return items[0].label||'';
+                    },
+                    label(ctx){
+                        const y=ctx.parsed?.y!=null?ctx.parsed.y:ctx.raw?.y;
+                        return`${ctx.dataset.label}: ${y!=null&&Number.isFinite(y)?y.toFixed(3):'N/A'}`;
+                    }
+                }
+            };
             resultsChart=new Chart(ctx,{type:chartJsType,data:chartData,options:{
                 responsive:true,maintainAspectRatio:false,
-                interaction:{mode:'index',intersect:false},
-                datasets:chartJsType==='bar'?{bar:barPct}:{},
+                interaction:{mode:useLinearX?'nearest':'index',intersect:false},
+                datasets:datasetBarOpts,
                 onClick:(event,elements,chart)=>{
                     if(!elements.length)return;
                     const{datasetIndex,index}=elements[0],key=`${metricKey}_${datasetIndex}_${index}`;
@@ -1887,10 +2026,10 @@
                 plugins:{
                     title:{display:true,text:titleText,font:{size:14,weight:'600'},color:'#e6edf3'},
                     legend:{labels:{color:'#8b949e',font:{size:11}}},
-                    tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y!=null?ctx.parsed.y.toFixed(3):'N/A'}`}},
+                    tooltip:tooltipOpts,
                     datalabels:{display:ctx=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return!!pointAnnotations[k];},formatter:(v,ctx)=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return pointAnnotations[k]||'';},anchor:'end',align:'top',offset:chartJsType==='bar'?2:4,font:{size:10},color:'#8b949e'}
                 },
-                scales:{y:{beginAtZero:true,title:{display:true,text:'Value',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.6)'},ticks:{color:'#8b949e'}},x:{title:{display:true,text:'Session / PDF',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.4)'},ticks:{color:'#8b949e'}}}
+                scales:{y:{beginAtZero:true,title:{display:true,text:'Value',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.6)'},ticks:{color:'#8b949e'}},x:xScale}
             }});
             updateMetricChartToolbarState();
         } else if(analysis.type==='radar'){
