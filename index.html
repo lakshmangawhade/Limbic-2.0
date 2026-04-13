@@ -739,7 +739,6 @@
     function computeAllDiagnostics() {
         const tests = sortTestConditions(Array.from(allTestConditions));
         const metrics = Array.from(allMetrics).filter(m=>m!=='Test Status'&&m!=='Stability Class').sort();
-        const KEY = ['Stability Score','Fatigue Ratio','Adaptation Ratio','Sway Path Length','Sway Velocity (Ave)','Area 95% Conf. Ellipse'];
         const n = allParsedData.length;
 
         const results = { descriptive:{}, inferential:{}, correlation:{}, regression:{}, multivariate:{}, longitudinal:{} };
@@ -764,7 +763,7 @@
         // Cohen's d between first and last session, consistency rank
         tests.forEach(tk => {
             results.inferential[tk] = {};
-            KEY.forEach(m => {
+            metrics.forEach(m => {
                 if(!allMetrics.has(m)) return;
                 const series = getSeriesFor(tk, m);
                 const nums = numSeries(series);
@@ -808,7 +807,7 @@
         // Pairwise correlations between all key metrics, per test condition
         tests.forEach(tk => {
             results.correlation[tk] = [];
-            const availMetrics = KEY.filter(m=>allMetrics.has(m)&&numSeries(getSeriesFor(tk,m)).length>=3);
+            const availMetrics = metrics.filter(m=>allMetrics.has(m)&&numSeries(getSeriesFor(tk,m)).length>=3);
             for(let i=0;i<availMetrics.length;i++){
                 for(let j=i+1;j<availMetrics.length;j++){
                     const m1=availMetrics[i], m2=availMetrics[j];
@@ -834,7 +833,7 @@
         // Linear regression: each key metric predicted from session index (time) + selected pairs
         tests.forEach(tk => {
             results.regression[tk] = [];
-            KEY.filter(m=>allMetrics.has(m)).forEach(m => {
+            metrics.filter(m=>allMetrics.has(m)).forEach(m => {
                 const series = getSeriesFor(tk, m);
                 const pairs = [];
                 series.forEach((v,idx)=>{ if(v!==undefined)pairs.push([idx,v]); });
@@ -856,7 +855,7 @@
         // PCA on key metrics per test condition
         tests.forEach(tk => {
             const feats={};
-            KEY.filter(m=>allMetrics.has(m)).forEach(m=>{
+            metrics.filter(m=>allMetrics.has(m)).forEach(m=>{
                 const s=getSeriesFor(tk,m).map(v=>v!==undefined?v:NaN);
                 feats[m]=s;
             });
@@ -875,7 +874,7 @@
         // For each key metric, analyze trend over all sessions per test condition
         tests.forEach(tk => {
             results.longitudinal[tk] = {};
-            KEY.filter(m=>allMetrics.has(m)).forEach(m=>{
+            metrics.filter(m=>allMetrics.has(m)).forEach(m=>{
                 const series=getSeriesFor(tk,m);
                 const pairs=[];
                 series.forEach((v,idx)=>{ if(v!==undefined)pairs.push([idx,v]); });
@@ -920,6 +919,16 @@
         }
 
         let html = '';
+        const nSessions = allParsedData.length;
+        if (nSessions < 2) {
+            html += `<div style="margin-bottom:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--border2);background:rgba(187,134,252,0.08);font-size:11.5px;line-height:1.45;color:var(--text2);">
+                <strong style="color:var(--text);">More reports needed.</strong> Upload <strong>2 or more</strong> VNG PDFs for session-to-session comparisons and inferential effect sizes (first vs last). Upload <strong>3 or more</strong> for pairwise correlations, regression vs session index, and longitudinal trend tests.
+            </div>`;
+        } else if (nSessions < 3) {
+            html += `<div style="margin-bottom:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--border2);background:rgba(187,134,252,0.06);font-size:11.5px;line-height:1.45;color:var(--text2);">
+                <strong style="color:var(--text);">Optional:</strong> Upload <strong>3 or more</strong> reports for correlation, regression (metric ~ session), and full longitudinal analysis.
+            </div>`;
+        }
 
         if(activeStatTab === 'descriptive') {
             html = '<div>';
@@ -963,7 +972,7 @@
                     if(d.consistencyComment) body += row('Consistency rank', `${d.consistencyRank}/${d.consistencyRank? Math.round(100/d.consistencyPct*d.consistencyRank):'-'}`, d.consistencyComment);
                     body += '</div>';
                 });
-                if(!body) body = '<p style="font-size:11px;color:var(--text3);">Need ≥3 sessions for full inferential stats.</p>';
+                if(!body) body = '<p style="font-size:11px;color:var(--text3);">No inferential results for this condition. Upload <strong>2 or more</strong> reports with this test for first-vs-last effect size; <strong>4 or more</strong> unlocks early vs late session means.</p>';
                 html += section(`🔬 ${tk} — Inferential`, `inf-${ti}`, body, ti===0);
             });
             html += '</div>';
@@ -973,7 +982,7 @@
             tests.forEach((tk,ti) => {
                 const corrs = diag.correlation[tk];
                 if(!corrs||!corrs.length) {
-                    html += section(`🔗 ${tk} — Correlations`, `corr-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 sessions with paired data.</p>', ti===0);
+                    html += section(`🔗 ${tk} — Correlations`, `corr-${ti}`, '<p style="font-size:11px;color:var(--text3);">Upload <strong>3 or more</strong> VNG reports with paired numeric fields for this test to compute correlations.</p>', ti===0);
                     return;
                 }
                 let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">
@@ -1005,7 +1014,7 @@
             tests.forEach((tk,ti) => {
                 const regs = diag.regression[tk];
                 if(!regs||!regs.length) {
-                    html += section(`📈 ${tk} — Regression`, `reg-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 sessions.</p>', ti===0);
+                    html += section(`📈 ${tk} — Regression`, `reg-${ti}`, '<p style="font-size:11px;color:var(--text3);">Upload <strong>3 or more</strong> reports with repeated measures for the same metric to fit regression vs session order.</p>', ti===0);
                     return;
                 }
                 let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">
@@ -1040,7 +1049,7 @@
             tests.forEach((tk,ti) => {
                 const pcd = diag.multivariate[tk];
                 if(!pcd) {
-                    html += section(`🔺 ${tk} — PCA`, `mv-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 key metrics and ≥2 sessions.</p>', ti===0);
+                    html += section(`🔺 ${tk} — PCA`, `mv-${ti}`, '<p style="font-size:11px;color:var(--text3);">Needs at least <strong>3 numeric fields</strong> with data for this test and <strong>2 or more</strong> sessions. Upload additional reports or ensure the PDFs include enough metrics.</p>', ti===0);
                     return;
                 }
                 let body = `<div style="margin-bottom:10px;">
@@ -1070,7 +1079,7 @@
             tests.forEach((tk,ti) => {
                 const ldata = diag.longitudinal[tk];
                 if(!ldata||!Object.keys(ldata).length) {
-                    html += section(`📉 ${tk} — Longitudinal`, `lng-${ti}`, '<p style="font-size:11px;color:var(--text3);">Requires ≥3 sessions.</p>', ti===0);
+                    html += section(`📉 ${tk} — Longitudinal`, `lng-${ti}`, '<p style="font-size:11px;color:var(--text3);">Upload <strong>3 or more</strong> reports with values for the same metric across sessions to assess longitudinal trend.</p>', ti===0);
                     return;
                 }
                 let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">
@@ -1293,6 +1302,161 @@
         return parseFloat(m[0]);
     }
 
+    /** Strip trailing "0.20 Hz" style suffix from OCR test_name for merging frequency blocks */
+    function stripTrailingHzFromTestName(name) {
+        if (!name || typeof name !== 'string') return name;
+        return name.replace(/\s+\d+\.?\d*\s*Hz\s*$/i, '').trim();
+    }
+
+    /** Remove trailing "~" left after stripping Hz (e.g. "Smooth Pursuit Horizontal ~" → "Smooth Pursuit Horizontal"). */
+    function stripTrailingTildeFromTestName(name) {
+        if (!name || typeof name !== 'string') return name;
+        return name.replace(/\s*~+\s*$/, '').trim();
+    }
+
+    /** Display helper: same cleanup for chart titles and labels. */
+    function formatTestNameForDisplay(name) {
+        if (!name || typeof name !== 'string') return name;
+        return stripTrailingTildeFromTestName(name);
+    }
+
+    /** Merge OKN Trapezoidal blocks that differ only by ramp speed into one test (e.g. 20/40/50 deg/sec). */
+    function stripOknSpeedSuffixFromTestName(name) {
+        if (!name || typeof name !== 'string') return name;
+        return name.replace(/^OKN Trapezoidal\s+~\s*\d+\.?\d*\s*deg\/sec\s+/i, 'OKN Trapezoidal ').trim();
+    }
+
+    function extractHzTokenFromTestName(name) {
+        if (!name) return null;
+        const m = String(name).match(/(\d+\.?\d*)\s*Hz/i);
+        return m ? `${parseFloat(m[1])} Hz` : null;
+    }
+
+    function extractDegSecSpeedFromOknTestName(name) {
+        if (!name || typeof name !== 'string') return null;
+        const m = String(name).match(/OKN Trapezoidal\s+~\s*(\d+\.?\d*)\s*deg\/sec/i);
+        return m ? `${parseFloat(m[1])} deg/sec` : null;
+    }
+
+    /** Split generic "Saccades" tables into Horizontal vs Vertical so they are never merged */
+    function splitSaccadeTableIfGeneric(tbl) {
+        const raw = (tbl.test_name || tbl.testName || '').trim();
+        if (!/^saccades?$/i.test(raw)) return [tbl];
+        const hor = [], ver = [], other = [];
+        (tbl.data || []).forEach(row => {
+            const fn = ((row.field_name || row.fieldName) || '').toLowerCase();
+            if (/\bhorizontal\b/.test(fn)) hor.push(row);
+            else if (/\bvertical\b/.test(fn)) ver.push(row);
+            else other.push(row);
+        });
+        const out = [];
+        if (hor.length && other.length) hor.push(...other);
+        else if (ver.length && other.length) ver.push(...other);
+        else if (other.length && !hor.length && !ver.length) hor.push(...other);
+        if (hor.length) out.push({ ...tbl, test_name: 'Horizontal Saccades', data: hor });
+        if (ver.length) out.push({ ...tbl, test_name: 'Vertical Saccades', data: ver });
+        return out.length ? out : [tbl];
+    }
+
+    /** Merge OCR tables that only differ by frequency in test_name (e.g. Smooth Pursuit … 0.20 Hz) or OKN ramp speed */
+    function mergeOcrTablesByCanonicalTest(ocrTables) {
+        if (!Array.isArray(ocrTables) || !ocrTables.length) return ocrTables;
+        const expanded = [];
+        ocrTables.forEach(tbl => splitSaccadeTableIfGeneric(tbl).forEach(t => expanded.push(t)));
+        const byKey = new Map();
+        expanded.forEach(tbl => {
+            const rawName = (tbl.test_name || tbl.testName || '').trim();
+            const hzFromName = extractHzTokenFromTestName(rawName);
+            const oknSpeedFromName = extractDegSecSpeedFromOknTestName(rawName);
+            const canonical = stripTrailingTildeFromTestName(stripOknSpeedSuffixFromTestName(stripTrailingHzFromTestName(rawName))) || rawName;
+            const key = /^horizontal\s+saccades$/i.test(canonical) || /^vertical\s+saccades$/i.test(canonical)
+                ? `__${canonical}` : canonical;
+            if (!byKey.has(key)) byKey.set(key, { test_name: canonical, data: [] });
+            const target = byKey.get(key);
+            (tbl.data || []).forEach(row => {
+                const fieldName = (row.field_name || row.fieldName || '').trim();
+                if (!fieldName) return;
+                let fn = fieldName;
+                const hz = hzFromName || extractHzTokenFromTestName(fieldName);
+                if (hz && !/^\d+\.?\d*\s*Hz/i.test(fn)) fn = `${hz} — ${fn}`;
+                if (oknSpeedFromName && !/^\d+\.?\d*\s*deg\/sec\s*[—\-]/i.test(fn)) fn = `${oknSpeedFromName} — ${fn}`;
+                target.data.push({ ...row, field_name: fn });
+            });
+        });
+        return Array.from(byKey.values()).filter(t => (t.data || []).length > 0);
+    }
+
+    /** Field names like "0.20 Hz — Gain" → stem "Gain" for multi-frequency grouping */
+    function parseHzFieldStem(fieldName) {
+        const m = String(fieldName).match(/^(\d+\.?\d*)\s*Hz\s*[—\-]\s*(.+)$/i);
+        if (!m) return null;
+        return { hz: `${parseFloat(m[1])} Hz`, stem: m[2].trim() };
+    }
+
+    /** Field names like "20 deg/sec — Average Eye Velocity (CW segment)" for OKN Trapezoidal */
+    function parseDegSecFieldStem(fieldName) {
+        const m = String(fieldName).match(/^(\d+\.?\d*)\s*deg\/sec\s*[—\-]\s*(.+)$/i);
+        if (!m) return null;
+        return { speed: `${parseFloat(m[1])} deg/sec`, stem: m[2].trim() };
+    }
+
+    function extractGroupLabelFromFieldName(fn) {
+        const m = String(fn).match(/^(\d+\.?\d*)\s*Hz/i);
+        if (m) return `${parseFloat(m[1])} Hz`;
+        const m2 = String(fn).match(/^(\d+\.?\d*)\s*deg\/sec/i);
+        if (m2) return `${parseFloat(m2[1])} deg/sec`;
+        return fn;
+    }
+
+    function sortGroupedFieldNames(fieldNames) {
+        return [...fieldNames].sort((a, b) => {
+            const ha = parseHzFieldStem(a), hb = parseHzFieldStem(b);
+            if (ha && hb) return parseFloat(ha.hz) - parseFloat(hb.hz);
+            const da = parseDegSecFieldStem(a), db = parseDegSecFieldStem(b);
+            if (da && db) return parseFloat(da.speed) - parseFloat(db.speed);
+            return a.localeCompare(b);
+        });
+    }
+
+    function collectFieldNamesForTest(testName) {
+        const fields = new Set();
+        allParsedData.forEach(d => {
+            Object.keys(d.tests[testName]?.metrics || {}).forEach(f => fields.add(f));
+        });
+        return Array.from(fields);
+    }
+
+    /** Build dropdown: one entry per Hz- or OKN deg/sec–grouped metric (same field at multiple speeds/frequencies) plus ungrouped fields */
+    function buildMetricSelectOptions(testName) {
+        const fields = collectFieldNamesForTest(testName);
+        const byStem = new Map();
+        const singles = [];
+        fields.forEach(fn => {
+            const hzParsed = parseHzFieldStem(fn);
+            const degParsed = parseDegSecFieldStem(fn);
+            const stem = hzParsed ? hzParsed.stem : degParsed ? degParsed.stem : null;
+            if (stem) {
+                if (!byStem.has(stem)) byStem.set(stem, []);
+                byStem.get(stem).push(fn);
+            } else singles.push(fn);
+        });
+        const out = [];
+        byStem.forEach((arr, stem) => {
+            const sorted = sortGroupedFieldNames(arr);
+            if (sorted.length >= 2) {
+                const tags = sorted.map(extractGroupLabelFromFieldName);
+                out.push({
+                    value: `__group__:${encodeURIComponent(stem)}`,
+                    label: `${stem} (${tags.join(', ')})`
+                });
+            } else singles.push(sorted[0]);
+        });
+        singles.sort((a, b) => a.localeCompare(b));
+        singles.forEach(fn => out.push({ value: fn, label: fn }));
+        out.sort((a, b) => a.label.localeCompare(b.label));
+        return out;
+    }
+
     async function uploadAndParseVngFiles(files) {
         const form = new FormData();
         files.forEach(f => form.append('files', f, f.name));
@@ -1324,7 +1488,7 @@
                 return tests[name];
             }
 
-            const ocrTables = Array.isArray(raw?.ocr_tables) ? raw.ocr_tables : [];
+            const ocrTables = mergeOcrTablesByCanonicalTest(Array.isArray(raw?.ocr_tables) ? raw.ocr_tables : []);
             ocrTables.forEach(tbl => {
                 const testName = (typeof tbl?.test_name === 'string' && tbl.test_name.trim()) || (typeof tbl?.testName === 'string' && tbl.testName.trim());
                 if (!testName) return;
@@ -1347,10 +1511,11 @@
 
             const testsInput = Array.isArray(raw?.tests) ? raw.tests : [];
             testsInput.forEach((testObj, tIdx) => {
-                const testName =
+                const rawTest =
                     (typeof testObj?.testName === 'string' && testObj.testName.trim()) ||
                     (typeof testObj?.test_name === 'string' && testObj.test_name.trim()) ||
                     `Test ${tIdx + 1}`;
+                const testName = stripTrailingTildeFromTestName(stripOknSpeedSuffixFromTestName(stripTrailingHzFromTestName(rawTest))) || rawTest;
                 const t = ensureTest(testName);
                 const fields = Array.isArray(testObj?.fields) ? testObj.fields : [];
                 fields.forEach((fieldObj, fIdx) => {
@@ -1512,19 +1677,31 @@
 
     // ---- Populate selects ----
     function populateMetricSelect(){
-        metricSelect.innerHTML='<option value="">-- Select Field --</option>';
+        metricSelect.innerHTML='';
+        const opt0=document.createElement('option');
+        opt0.value=''; opt0.textContent='-- Select Field --';
+        metricSelect.appendChild(opt0);
         const selectedTest = testSelect.value;
         if(!selectedTest) return;
-        const seen = new Set();
-        allParsedData.forEach(d => {
-            Object.keys(d.tests[selectedTest]?.metrics || {}).forEach(m => seen.add(m));
+        const opts=buildMetricSelectOptions(selectedTest);
+        opts.forEach((o,i)=>{
+            const opt=document.createElement('option');
+            opt.value=o.value;
+            opt.textContent=o.label;
+            if(i===0) opt.selected=true;
+            metricSelect.appendChild(opt);
         });
-        Array.from(seen).sort().forEach((m, i) => metricSelect.innerHTML += `<option value="${m}" ${i===0?'selected':''}>${m}</option>`);
     }
     function populateTestSelect(){
         const current = testSelect.value;
         testSelect.innerHTML='';
-        sortTestConditions(Array.from(allTestConditions)).forEach((t,i)=>testSelect.innerHTML+=`<option value="${t}"${(!current&&i===0)||current===t?' selected':''}>${t}</option>`);
+        sortTestConditions(Array.from(allTestConditions)).forEach((t,i)=>{
+            const opt=document.createElement('option');
+            opt.value=t;
+            opt.textContent=formatTestNameForDisplay(t);
+            if((!current&&i===0)||current===t) opt.selected=true;
+            testSelect.appendChild(opt);
+        });
     }
     function populateRadarMetricSelector(){
         radarMetricSelector.innerHTML='';
@@ -1579,44 +1756,75 @@
 
     function calcStats(values){const m=values.reduce((a,b)=>a+b,0)/values.length;const sd=Math.sqrt(values.map(x=>(x-m)**2).reduce((a,b)=>a+b,0)/values.length);return{mean:m,stdDev:sd};}
 
+    function resolveGroupFieldNames(testName, metric){
+        if(!metric||!String(metric).startsWith('__group__:')) return [metric];
+        const stem=decodeURIComponent(metric.slice('__group__:'.length));
+        return sortGroupedFieldNames(collectFieldNamesForTest(testName).filter(fn=>{
+            const ph=parseHzFieldStem(fn);
+            if(ph&&ph.stem===stem) return true;
+            const pd=parseDegSecFieldStem(fn);
+            return pd&&pd.stem===stem;
+        }));
+    }
+
     function analyzeMetricData(testName, metric){
         const nf=allParsedData.length;
-        const labels=allParsedData.map(d=>getLabel(d).length>22?'…'+getLabel(d).slice(-19):getLabel(d));
-        const sorted=['Value'];
-        const tableData={header:['Test','Field',...labels],rows:[]};
-        if(nf===2)tableData.header.push('Change','% Change');
-        else if(nf>2)tableData.header.push('Mean','SD');
-        const chartData={labels:sorted,datasets:[]};
+        const labels=allParsedData.map(d=>{const L=getLabel(d);return L.length>22?'…'+L.slice(-19):L;});
+        const fullLabels=allParsedData.map(d=>getLabel(d));
+        const isGroup=metric&&String(metric).startsWith('__group__:');
+        const displayMetric=isGroup?decodeURIComponent(metric.slice('__group__:'.length)):metric;
+        const fieldNames=isGroup?resolveGroupFieldNames(testName,metric):[metric];
 
-        if(nf===1){
-            const data=[];
-            sorted.forEach(()=>{const v=allParsedData[0].tests[testName]?.metrics[metric];data.push(v);tableData.rows.push([testName,metric,v]);});
-            chartData.datasets.push({label:labels[0],data,fill:false,borderColor:CHART_COLORS[0].border,backgroundColor:CHART_COLORS[0].bg,borderWidth:2,pointRadius:4,pointHoverRadius:6});
-        } else if(nf===2){
-            const[d1,d2]=[[],[]];
-            sorted.forEach(()=>{
-                const v1=allParsedData[0].tests[testName]?.metrics[metric],v2=allParsedData[1].tests[testName]?.metrics[metric];
-                d1.push(v1);d2.push(v2);
-                let ch='N/A',pct='N/A';
-                if(v1!==undefined&&v2!==undefined){ch=v2-v1;pct=v1!==0?(ch/v1)*100:'N/A';}
-                tableData.rows.push([testName,metric,v1,v2,ch,pct]);
-            });
-            chartData.datasets.push({label:labels[0],data:d1,fill:false,borderColor:CHART_COLORS[0].border,backgroundColor:CHART_COLORS[0].bg,borderWidth:2,pointRadius:5,pointHoverRadius:7});
-            chartData.datasets.push({label:labels[1],data:d2,fill:false,borderColor:CHART_COLORS[1].border,backgroundColor:CHART_COLORS[1].bg,borderWidth:2,pointRadius:5,pointHoverRadius:7});
-        } else {
-            allParsedData.forEach((fd,i)=>{
-                const data=sorted.map(()=>fd.tests[testName]?.metrics[metric]);
-                chartData.datasets.push({label:labels[i],data,fill:false,borderColor:CHART_COLORS[i%CHART_COLORS.length].border,backgroundColor:CHART_COLORS[i%CHART_COLORS.length].bg,borderWidth:2,pointRadius:4,pointHoverRadius:6});
-            });
-            sorted.forEach(()=>{
-                const row=[testName,metric];
-                const vals=allParsedData.map(fd=>{const v=fd.tests[testName]?.metrics[metric];row.push(v!==undefined?v:'N/A');return v;});
-                const valid=vals.filter(v=>v!==undefined);
-                if(valid.length>0){const{mean:m,stdDev:s}=calcStats(valid);row.push(m,s);}else row.push('N/A','N/A');
+        const tableData={header:['Test','Field',...fullLabels],rows:[]};
+        if(nf===2) tableData.header.push('Change','% Change');
+        else if(nf>2) tableData.header.push('Mean','SD');
+        const chartData={labels,datasets:[]};
+
+        const testNameDisp=formatTestNameForDisplay(testName);
+        if(isGroup){
+            fieldNames.forEach((fn,fi)=>{
+                const data=allParsedData.map(d=>d.tests[testName]?.metrics[fn]);
+                chartData.datasets.push({
+                    label:extractGroupLabelFromFieldName(fn),
+                    data,fill:false,
+                    borderColor:CHART_COLORS[fi%CHART_COLORS.length].border,
+                    backgroundColor:CHART_COLORS[fi%CHART_COLORS.length].bg,
+                    borderWidth:2,pointRadius:4,pointHoverRadius:6
+                });
+                const row=[testNameDisp,fn,...data];
+                if(nf===2){
+                    const v1=data[0],v2=data[1];
+                    let ch='N/A',pct='N/A';
+                    if(v1!==undefined&&v2!==undefined){ch=v2-v1;pct=v1!==0?(ch/v1)*100:'N/A';}
+                    row.push(ch,pct);
+                } else if(nf>2){
+                    const valid=data.filter(v=>v!==undefined);
+                    if(valid.length>0){const{mean:m,stdDev:s}=calcStats(valid);row.push(m,s);}else row.push('N/A','N/A');
+                }
                 tableData.rows.push(row);
             });
+        } else {
+            const data=allParsedData.map(d=>d.tests[testName]?.metrics[metric]);
+            chartData.datasets.push({
+                label:displayMetric,
+                data,fill:false,
+                borderColor:CHART_COLORS[0].border,
+                backgroundColor:CHART_COLORS[0].bg,
+                borderWidth:2,pointRadius:4,pointHoverRadius:6
+            });
+            const row=[testNameDisp,metric,...data];
+            if(nf===2){
+                const v1=data[0],v2=data[1];
+                let ch='N/A',pct='N/A';
+                if(v1!==undefined&&v2!==undefined){ch=v2-v1;pct=v1!==0?(ch/v1)*100:'N/A';}
+                row.push(ch,pct);
+            } else if(nf>2){
+                const valid=data.filter(v=>v!==undefined);
+                if(valid.length>0){const{mean:m,stdDev:s}=calcStats(valid);row.push(m,s);}else row.push('N/A','N/A');
+            }
+            tableData.rows.push(row);
         }
-        return{type:'line',chartData,tableData,numFiles:nf,metric, testName};
+        return{type:'line',chartData,tableData,numFiles:nf,metric,displayMetric,isGroup,testName,displayTestName:testNameDisp};
     }
 
     function analyzeRadarData(test){
@@ -1639,7 +1847,11 @@
             else if(nf>2){const valid=vals.filter(v=>v!==undefined);if(valid.length>0){const{mean:m2,stdDev:s}=calcStats(valid);r.push(m2,s);}else r.push('N/A','N/A');}
             tableData.rows.push(r);
         });
-        return{type:'radar',chartData,tableData,numFiles:nf,test};
+        return{type:'radar',chartData,tableData,numFiles:nf,test,displayTestName:formatTestNameForDisplay(test)};
+    }
+
+    function updateMetricChartToolbarState() {
+        syncChartTypeButtons();
     }
 
     function updateChart(analysis){
@@ -1647,7 +1859,10 @@
         const ctx=chartCanvas.getContext('2d');
         if(analysis.type==='line'){
             const metricKey=analysis.metric;
+            const disp=analysis.displayMetric||analysis.metric;
+            const tn=analysis.displayTestName||formatTestNameForDisplay(analysis.testName);
             const chartJsType=metricChartStyle==='bar'?'bar':'line';
+            const groupedMultiSeries=analysis.isGroup&&analysis.chartData.datasets.length>1;
             const chartData={
                 labels:analysis.chartData.labels,
                 datasets:analysis.chartData.datasets.map(ds=>{
@@ -1656,9 +1871,12 @@
                     return copy;
                 })
             };
+            const titleText=`${tn} · ${disp}`;
+            const barPct=groupedMultiSeries?{categoryPercentage:0.66,barPercentage:0.86}:{categoryPercentage:0.68,barPercentage:0.78};
             resultsChart=new Chart(ctx,{type:chartJsType,data:chartData,options:{
                 responsive:true,maintainAspectRatio:false,
                 interaction:{mode:'index',intersect:false},
+                datasets:chartJsType==='bar'?{bar:barPct}:{},
                 onClick:(event,elements,chart)=>{
                     if(!elements.length)return;
                     const{datasetIndex,index}=elements[0],key=`${metricKey}_${datasetIndex}_${index}`;
@@ -1667,21 +1885,24 @@
                     if(comment!==null){if(comment.trim())pointAnnotations[key]=comment.trim();else delete pointAnnotations[key];chart.update();}
                 },
                 plugins:{
-                    title:{display:true,text:analysis.numFiles>1?`${analysis.testName} · ${analysis.metric} — Multi-session`:`${analysis.testName} · ${analysis.metric}`,font:{size:14,weight:'600'},color:'#e6edf3'},
+                    title:{display:true,text:titleText,font:{size:14,weight:'600'},color:'#e6edf3'},
                     legend:{labels:{color:'#8b949e',font:{size:11}}},
                     tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y!=null?ctx.parsed.y.toFixed(3):'N/A'}`}},
                     datalabels:{display:ctx=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return!!pointAnnotations[k];},formatter:(v,ctx)=>{const k=`${metricKey}_${ctx.datasetIndex}_${ctx.dataIndex}`;return pointAnnotations[k]||'';},anchor:'end',align:'top',offset:chartJsType==='bar'?2:4,font:{size:10},color:'#8b949e'}
                 },
-                scales:{y:{beginAtZero:true,title:{display:true,text:'Value',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.6)'},ticks:{color:'#8b949e'}},x:{title:{display:true,text:'Test Condition',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.4)'},ticks:{color:'#8b949e'}}}
+                scales:{y:{beginAtZero:true,title:{display:true,text:'Value',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.6)'},ticks:{color:'#8b949e'}},x:{title:{display:true,text:'Session / PDF',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.4)'},ticks:{color:'#8b949e'}}}
             }});
+            updateMetricChartToolbarState();
         } else if(analysis.type==='radar'){
-            if(!analysis.chartData.labels?.length)return;
+            if(!analysis.chartData.labels?.length){updateMetricChartToolbarState();return;}
+            const radarTitle=analysis.displayTestName||formatTestNameForDisplay(analysis.test);
             resultsChart=new Chart(ctx,{type:'radar',data:analysis.chartData,options:{
                 responsive:true,maintainAspectRatio:false,
                 elements:{line:{tension:0.1}},
                 scales:{r:{beginAtZero:true,min:0,max:100,pointLabels:{font:{size:11},color:'#8b949e'},ticks:{display:false,stepSize:25},angleLines:{color:'rgba(48,54,61,0.8)'},grid:{color:'rgba(48,54,61,0.6)'}}},
-                plugins:{title:{display:true,text:`Profile: ${analysis.test}`,font:{size:14,weight:'600'},color:'#e6edf3'},legend:{labels:{color:'#8b949e',font:{size:11}}},tooltip:{backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>{const orig=ctx.dataset.originalData[ctx.dataIndex];return`${ctx.dataset.label}: ${orig!==undefined?orig.toFixed(3):'N/A'} (${ctx.parsed.r.toFixed(1)})`;}}}}}
+                plugins:{title:{display:true,text:`Profile: ${radarTitle}`,font:{size:14,weight:'600'},color:'#e6edf3'},legend:{labels:{color:'#8b949e',font:{size:11}}},tooltip:{backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>{const orig=ctx.dataset.originalData[ctx.dataIndex];return`${ctx.dataset.label}: ${orig!==undefined?orig.toFixed(3):'N/A'} (${ctx.parsed.r.toFixed(1)})`;}}}}}
             });
+            updateMetricChartToolbarState();
         }
     }
 
@@ -1743,7 +1964,7 @@
             metrics.forEach(m=>html+=`<th style="padding:5px 8px;text-align:center;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:10px;text-transform:uppercase;min-width:90px;">${escapeHtml(m)}</th>`);
             html+=`</tr></thead><tbody>`;
             tests.forEach(test=>{
-                html+=`<tr><td style="padding:5px 10px;font-weight:600;color:var(--text2);border:1px solid var(--border2);background:var(--surface2);white-space:nowrap;font-size:11px;">${test}</td>`;
+                html+=`<tr><td style="padding:5px 10px;font-weight:600;color:var(--text2);border:1px solid var(--border2);background:var(--surface2);white-space:nowrap;font-size:11px;">${escapeHtml(formatTestNameForDisplay(test))}</td>`;
                 metrics.forEach(m=>{
                     const v=session.tests[test]?.metrics[m];
                     if(v===undefined){html+=`<td style="padding:5px 8px;text-align:center;border:1px solid var(--border2);color:var(--text3);">—</td>`;return;}
@@ -1776,7 +1997,7 @@
             tests.forEach(test=>{
                 const vals=allParsedData.map(s=>s.tests[test]?.metrics[m]);
                 if(!vals.some(v=>v!==undefined))return;
-                tbl+=`<tr><td class="td-name">${escapeHtml(m)}</td><td>${test}</td>`;
+                tbl+=`<tr><td class="td-name">${escapeHtml(m)}</td><td>${escapeHtml(formatTestNameForDisplay(test))}</td>`;
                 vals.forEach(v=>tbl+=`<td>${v!==undefined?v.toFixed(3):'N/A'}</td>`);
                 if(nf===2){const[v1,v2]=vals;if(v1!==undefined&&v2!==undefined){const ch=v2-v1,pct=v1!==0?(ch/v1)*100:0;const dir=RADAR_KEY_METRICS[m];const g=dir==='high'?ch>0:dir==='low'?ch<0:null;const c=g===true?' class="td-good"':g===false?' class="td-bad"':'';tbl+=`<td${c}>${ch>0?'+':''}${ch.toFixed(3)}</td><td${c}>${pct>0?'+':''}${pct.toFixed(1)}%</td>`;}else tbl+=`<td>N/A</td><td>N/A</td>`;}
                 tbl+=`</tr>`;
@@ -1801,14 +2022,14 @@
         });
         resultsChart=new Chart(ctx,{type:'scatter',data:{datasets},options:{
             responsive:true,maintainAspectRatio:false,
-            plugins:{title:{display:true,text:`COP — ${selTest==='all'?'All Tests':selTest}`,font:{size:14,weight:'600'},color:'#e6edf3'},legend:{labels:{color:'#8b949e',font:{size:11}}},tooltip:{backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label} [${ctx.raw.test}]: X=${ctx.raw.x.toFixed(1)}mm, Y=${ctx.raw.y.toFixed(1)}mm`}}},
+            plugins:{title:{display:true,text:`COP — ${selTest==='all'?'All Tests':formatTestNameForDisplay(selTest)}`,font:{size:14,weight:'600'},color:'#e6edf3'},legend:{labels:{color:'#8b949e',font:{size:11}}},tooltip:{backgroundColor:'#1c2330',borderColor:'#30363d',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e',callbacks:{label:ctx=>`${ctx.dataset.label} [${ctx.raw.test}]: X=${ctx.raw.x.toFixed(1)}mm, Y=${ctx.raw.y.toFixed(1)}mm`}}},
             scales:{x:{title:{display:true,text:'Xo — Medial-Lateral (mm)',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.5)'},ticks:{color:'#8b949e'}},y:{title:{display:true,text:'Yo — Anterior-Posterior (mm)',color:'#6e7681'},grid:{color:'rgba(48,54,61,0.5)'},ticks:{color:'#8b949e'}}}
         }});
         let tbl=`<table class="data-table"><thead><tr>`;
         ['Test',...allParsedData.map(d=>getLabel(d)+' Xo (mm)'),...allParsedData.map(d=>getLabel(d)+' Yo (mm)')].forEach(h=>tbl+=`<th>${escapeHtml(h)}</th>`);
         tbl+=`</tr></thead><tbody>`;
         tests.forEach(test=>{
-            tbl+=`<tr><td class="td-name">${test}</td>`;
+            tbl+=`<tr><td class="td-name">${escapeHtml(formatTestNameForDisplay(test))}</td>`;
             allParsedData.forEach(s=>{const v=s.tests[test]?.metrics['Sway Center Xo'];tbl+=`<td>${v!==undefined?(v*1000).toFixed(2):'N/A'}</td>`;});
             allParsedData.forEach(s=>{const v=s.tests[test]?.metrics['Sway Center Yo'];tbl+=`<td>${v!==undefined?(v*1000).toFixed(2):'N/A'}</td>`;});
             tbl+=`</tr>`;
@@ -1829,21 +2050,37 @@
         const a=document.createElement('a');a.href=resultsChart.toBase64Image('image/png',1.0);a.download=`vng_${currentView}_${new Date().toISOString().slice(0,10)}.png`;a.click();
     });
 
+    function formatNormRangeSuffix(d, tk, m) {
+        const meta = d.tests[tk]?.fieldMeta?.[m];
+        if (!meta || typeof meta !== 'object') return '';
+        const lo = meta.normative_range_low ?? meta.normativeRangeLow;
+        const hi = meta.normative_range_high ?? meta.normativeRangeHigh;
+        const loStr = lo !== undefined && lo !== null && String(lo).trim() !== '' ? String(lo).trim() : '';
+        const hiStr = hi !== undefined && hi !== null && String(hi).trim() !== '' ? String(hi).trim() : '';
+        if (!loStr && !hiStr) return '';
+        if (loStr && hiStr) return ` [normative ${loStr}–${hiStr}]`;
+        if (loStr) return ` [normative low: ${loStr}]`;
+        return ` [normative high: ${hiStr}]`;
+    }
+
     function buildVngReportDump() {
         const tests = sortTestConditions(Array.from(allTestConditions));
         const metrics = Array.from(allMetrics).filter(m => m !== 'Test Status' && m !== 'Stability Class').sort();
         let diag;
         try { diag = computeAllDiagnostics(); } catch (e2) { diag = null; }
-        let dump = `VNG FULL REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n\n`;
+        let dump = `VNG FULL REPORT\nSessions: ${allParsedData.map(d => getLabel(d)).join(' → ')}\n`;
+        dump += `Interpretation rules: treat Horizontal Saccades and Vertical Saccades as separate planes; fields prefixed with Hz (e.g. 0.20 Hz —) are frequency-specific — compare within the same field name across sessions.\n`;
+        dump += `Each measured value includes PDF normative range (low–high) in brackets when available; use these ranges when judging clinical significance.\n\n`;
         tests.forEach(tk => {
-            dump += `=== ${tk} ===\n`;
+            const tkDisp = formatTestNameForDisplay(tk);
+            dump += `=== ${tkDisp} ===\n`;
             if (diag?.multivariate?.[tk]?.comment) dump += `  [PCA] ${diag.multivariate[tk].comment}\n`;
             metrics.forEach(m => {
                 const vals = allParsedData.map(d => d.tests[tk]?.metrics[m]);
                 if (!vals.some(v => v !== undefined)) return;
                 const nums = numSeries(vals);
                 const ds = descStats(nums);
-                dump += `  ${m}: ${allParsedData.map((d, i) => { const v = vals[i]; return v !== undefined ? `${getLabel(d)}=${typeof v === 'number' ? v.toFixed(3) : v}` : null; }).filter(Boolean).join(' | ')}`;
+                dump += `  ${m}: ${allParsedData.map((d, i) => { const v = vals[i]; return v !== undefined ? `${getLabel(d)}=${typeof v === 'number' ? v.toFixed(3) : v}${formatNormRangeSuffix(d, tk, m)}` : null; }).filter(Boolean).join(' | ')}`;
                 if (ds) {
                     dump += ` | mean=${ds.mean.toFixed(3)} SD=${ds.sd !== undefined ? ds.sd.toFixed(3) : 'N/A'} CV=${ds.cv !== undefined ? ds.cv.toFixed(1) + '%' : 'N/A'}`;
                     if (diag?.inferential?.[tk]?.[m]?.earlyLateComment) dump += ` | ${diag.inferential[tk][m].earlyLateComment}`;
@@ -1936,6 +2173,7 @@
 Provide a comprehensive structured interpretation.
 Structure: Executive Summary → Test-by-Test Analysis → Statistical Highlights (comment on SD consistency/inconsistency, correlations, regressions, and longitudinal trends) → Clinical Implications.
 For any metric where CV>25% or permutation p<0.05, flag it explicitly.
+When the data includes PDF normative ranges in brackets (e.g. [normative low–high] or [normative x–y]), use those ranges explicitly when commenting on whether values fall within expected norms; do not invent different reference ranges.
 Be professional and evidence-based. Do not diagnose.`;
 
         try {
@@ -1975,6 +2213,7 @@ Write an executive summary at approximately a 12th-grade reading level. Use clea
 Maintain a professional, clinician-facing tone. Do NOT address the patient directly (avoid phrases like "your results show"). Instead, use objective phrasing such as "The data indicates..." or "The results suggest...".
 
 Focus on what the numerical results imply about balance and stability across conditions and sessions. Do not diagnose or name specific diseases. Do not add or infer data beyond what is provided.
+When normative ranges from the PDF appear in brackets next to values (normative low–high), reference them when discussing whether results are within expected norms.
 
 Structure the response with short titled sections:
 - Overview
@@ -2022,10 +2261,21 @@ Structure the response with short titled sections:
         if(currentView==='metric'){
             const m=metricSelect.value;if(!m){interpretationOutput.textContent='Select a metric first.';lastInterpretationRaw='';resetInterpretBtn();return;}
             const tests=sortTestConditions(Array.from(allTestConditions));
-            const sdRows=tests.map(tk=>{const ds=descStats(numSeries(getSeriesFor(tk,m)));return ds?.sd!=null?{tk,sd:ds.sd,cv:ds.cv}:null;}).filter(Boolean).sort((a,b)=>b.sd-a.sd);
-            const sdNote=sdRows.length?`\n[SD Analysis]\nHighest variability: ${sdRows[0].tk} (SD=${sdRows[0].sd.toFixed(3)}, CV=${sdRows[0].cv?.toFixed(1)}%)\nLowest variability: ${sdRows[sdRows.length-1].tk} (SD=${sdRows[sdRows.length-1].sd.toFixed(3)}, CV=${sdRows[sdRows.length-1].cv?.toFixed(1)}%)`:'\n[No SD data]';
-            sys=`You are a clinical expert in vestibular diagnostics. Analyze VNG data for field: ${m}. Comment explicitly on SD consistency/inconsistency across sessions for the selected test. Be concise. Start: "Interpretation: ${m}"`;
-            query=`Data:\n${summaryText}\n${sdNote}`;
+            const isGroup=m.startsWith('__group__:');
+            const interpretLabel=isGroup?decodeURIComponent(m.slice('__group__:'.length)):m;
+            let sdNote='\n[No cross-test SD data for grouped frequencies]';
+            if(!isGroup){
+                const sdRows=tests.map(tk=>{const ds=descStats(numSeries(getSeriesFor(tk,m)));return ds?.sd!=null?{tk,sd:ds.sd,cv:ds.cv}:null;}).filter(Boolean).sort((a,b)=>b.sd-a.sd);
+                sdNote=sdRows.length?`\n[SD Analysis]\nHighest variability: ${sdRows[0].tk} (SD=${sdRows[0].sd.toFixed(3)}, CV=${sdRows[0].cv?.toFixed(1)}%)\nLowest variability: ${sdRows[sdRows.length-1].tk} (SD=${sdRows[sdRows.length-1].sd.toFixed(3)}, CV=${sdRows[sdRows.length-1].cv?.toFixed(1)}%)`:'\n[No SD data]';
+            } else {
+                sdNote='\n[Grouped frequencies] Give a separate brief interpretation for each Hz band (series) and how they compare within sessions; do not merge them into one number.';
+            }
+            const tk=testSelect.value||'';
+            let planeNote='';
+            if(/^horizontal\s+saccades$/i.test(tk)) planeNote='\n[Plane] Horizontal saccades only — interpret separately from vertical saccades.';
+            else if(/^vertical\s+saccades$/i.test(tk)) planeNote='\n[Plane] Vertical saccades only — interpret separately from horizontal saccades.';
+            sys=`You are a clinical expert in vestibular diagnostics. Analyze VNG data for field: ${interpretLabel}. ${isGroup?'Each frequency is a distinct condition — interpret individually. ':''}Comment on session trends using the table. Be concise. Start: "Interpretation: ${interpretLabel}"`;
+            query=`Data:\n${summaryText}\n${sdNote}${planeNote}`;
         } else if(currentView==='radar'){
             const t=testSelect.value;if(!t){interpretationOutput.textContent='Select a test condition.';lastInterpretationRaw='';resetInterpretBtn();return;}
             sys=`You are a clinical expert in vestibular diagnostics. Analyze the VNG profile for test: ${t}. Comment on variability across sessions and field patterns. Be concise. Start: "Profile: ${t}"`;

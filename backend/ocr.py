@@ -366,7 +366,12 @@ class PDFTableExtractor:
             'Visual': ['Visual Reaction Time'],
             'Auditory': ['Auditory Reaction Time'],
             'Subjective': ['Subjective Visual Horizontal', 'Subjective Visual Vertical'],
-            'OKN': ['OKN Trapezoidal ~ 20.0 deg/sec Horizontal', 'OKN Trapezoidal ~ 40.0 deg/sec Horizontal', 'OKN Trapezoidal ~ 60.0 deg/sec Horizontal']
+            'OKN': [
+                'OKN Trapezoidal ~ 20.0 deg/sec Horizontal',
+                'OKN Trapezoidal ~ 40.0 deg/sec Horizontal',
+                'OKN Trapezoidal ~ 50.0 deg/sec Horizontal',
+                'OKN Trapezoidal ~ 60.0 deg/sec Horizontal',
+            ]
         }
         
         # Find the test name by looking for patterns
