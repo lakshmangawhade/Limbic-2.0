@@ -1,5 +1,5 @@
 """
-VNG PDF table extraction API.
+Pupilometry PDF table extraction API.
 
 Returns JSON aligned with the frontend contract:
 { "sessions": [ { "pdf_name", "ocr_tables": [ { "test_name", "data": [ ... ] } ] } ] }
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_FILES_PER_REQUEST = 10
 
-app = FastAPI(title="VNG Parser", version="1.0.0")
+app = FastAPI(title="Pupilometry Parser", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,8 +42,8 @@ def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/parse-vng")
-async def parse_vng(files: List[UploadFile] = File(...)) -> Dict[str, Any]:
+@app.post("/parse-pupilometry")
+async def parse_pupilometry(files: List[UploadFile] = File(...)) -> Dict[str, Any]:
     """
     Accept multipart field name `files` (one or more PDFs).
     Response: { "sessions": [ { "pdf_name", "ocr_tables", "processing_timestamp" }, ... ] }
@@ -86,8 +86,8 @@ async def parse_vng(files: List[UploadFile] = File(...)) -> Dict[str, Any]:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error("parse_vng error: %s\n%s", e, traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"VNG parse failed: {e!s}") from e
+            logger.error("parse_pupilometry error: %s\n%s", e, traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Pupilometry parse failed: {e!s}") from e
         finally:
             try:
                 os.unlink(path)

@@ -1,9 +1,9 @@
 services:
-  # Python VNG parser — Node proxies /api/vng/parse here (see server.js VNG_PARSE_URL)
-  vng-backend:
+  # Python pupilometry parser — Node proxies /api/pupilometry/parse here
+  pupilometry-backend:
     build:
       context: ./backend
-    image: vng-backend
+    image: pupilometry-backend
     expose:
       - "8000"
     restart: unless-stopped
@@ -11,14 +11,14 @@ services:
   posturography-analyzer:
     build:
       context: .
-    image: vng-analyzer
+    image: pupilometry-analyzer
     ports:
       - "3000:3000"
     env_file:
       - .env
     environment:
       # Inside Docker, 127.0.0.1 is this container — use the backend service name
-      VNG_PARSE_URL: http://vng-backend:8000/parse-vng
+      PUPILOMETRY_PARSE_URL: http://pupilometry-backend:8000/parse-pupilometry
     depends_on:
-      - vng-backend
+      - pupilometry-backend
     restart: unless-stopped

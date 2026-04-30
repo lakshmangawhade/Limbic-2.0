@@ -55,7 +55,8 @@ const ANTHROPIC_API_KEY = normalizeEnvValue(process.env.ANTHROPIC_API_KEY);
 const ANTHROPIC_MODEL = normalizeEnvValue(process.env.ANTHROPIC_MODEL);
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-const VNG_PARSE_URL = normalizeEnvValue(process.env.VNG_PARSE_URL) || 'http://127.0.0.1:8000/parse-vng';
+const PUPILOMETRY_PARSE_URL = normalizeEnvValue(process.env.PUPILOMETRY_PARSE_URL)
+    || 'http://127.0.0.1:8000/parse-pupilometry';
 
 function sendJson(res, statusCode, payload) {
     res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -199,12 +200,12 @@ function proxyAnthropicRequest(req, res) {
     });
 }
 
-function proxyVngParseRequest(req, res) {
+function proxyPupilometryParseRequest(req, res) {
     let parsedUrl;
     try {
-        parsedUrl = new URL(VNG_PARSE_URL);
+        parsedUrl = new URL(PUPILOMETRY_PARSE_URL);
     } catch {
-        sendJson(res, 500, { error: { message: 'Server VNG_PARSE_URL is invalid.' } });
+        sendJson(res, 500, { error: { message: 'Server PUPILOMETRY_PARSE_URL is invalid.' } });
         return;
     }
 
@@ -230,7 +231,7 @@ function proxyVngParseRequest(req, res) {
             const statusCode = upstreamRes.statusCode || 502;
             if (statusCode >= 400) {
                 const parsed = parseJsonSafe(body);
-                sendJson(res, statusCode, { error: { message: parsed?.error?.message || parsed?.message || `VNG parser returned HTTP ${statusCode}.` } });
+                sendJson(res, statusCode, { error: { message: parsed?.error?.message || parsed?.message || `Pupilometry parser returned HTTP ${statusCode}.` } });
                 return;
             }
             let payload = parseJsonSafe(body);
@@ -240,7 +241,7 @@ function proxyVngParseRequest(req, res) {
     });
 
     upstreamReq.on('error', error => {
-        sendJson(res, 502, { error: { message: `VNG backend error: ${error.message}` } });
+        sendJson(res, 502, { error: { message: `Pupilometry backend error: ${error.message}` } });
     });
 
     let size = 0;
@@ -272,8 +273,8 @@ http.createServer((req, res) => {
         return;
     }
 
-    if (req.method === 'POST' && req.url === '/api/vng/parse') {
-        proxyVngParseRequest(req, res);
+    if (req.method === 'POST' && req.url === '/api/pupilometry/parse') {
+        proxyPupilometryParseRequest(req, res);
         return;
     }
 
