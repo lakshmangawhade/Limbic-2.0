@@ -1,2345 +1,838 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pupilometry Analyzer</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>
-:root {
-  --bg: #07090f;
-  --surface: #0e1219;
-  --surface2: #141921;
-  --surface3: #1c2333;
-  --border: #252d3d;
-  --border2: #1e2636;
-  --text: #e2e8f7;
-  --text2: #8899bb;
-  --text3: #4a5a7a;
-  --accent: #4f9cf9;
-  --accent2: #1a4a8f;
-  --right: #4adecc;
-  --right-bg: rgba(74,222,204,0.12);
-  --right-border: rgba(74,222,204,0.3);
-  --left: #f97316;
-  --left-bg: rgba(249,115,22,0.12);
-  --left-border: rgba(249,115,22,0.3);
-  --green: #22d3a5;
-  --red: #f45b5b;
-  --yellow: #eab308;
-  --purple: #a78bfa;
-}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5;}
-code,.mono{font-family:'DM Mono',monospace;}
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CNSVS Cognitive Analysis Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #1c2330;
+            --border: #30363d;
+            --border2: #21262d;
+            --text: #e6edf3;
+            --text2: #8b949e;
+            --text3: #6e7681;
+            --accent: #58a6ff;
+            --accent2: #1f6feb;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --purple: #bc8cff;
+            --orange: #ffa657;
+            --teal: #39d353
+        }
 
-/* Scrollbar */
-::-webkit-scrollbar{width:5px;height:5px;}
-::-webkit-scrollbar-track{background:var(--surface);}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
-::-webkit-scrollbar-thumb:hover{background:#3a4a6a;}
+        * {
+            box-sizing: border-box
+        }
 
-/* Layout */
-.app{max-width:1440px;margin:0 auto;padding:24px 20px;}
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'IBM Plex Sans', sans-serif;
+            min-height: 100vh
+        }
 
-/* Header */
-.header{display:flex;align-items:center;gap:14px;padding-bottom:22px;border-bottom:1px solid var(--border2);margin-bottom:24px;}
-.logo{width:38px;height:38px;background:linear-gradient(135deg,var(--accent2),var(--accent));border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.header-text h1{font-size:20px;font-weight:700;letter-spacing:-0.4px;color:var(--text);}
-.header-text p{font-size:12px;color:var(--text3);margin-top:2px;}
+        .mono {
+            font-family: 'IBM Plex Mono', monospace
+        }
 
-/* Two-column */
-.layout{display:flex;gap:20px;align-items:flex-start;}
-.sidebar{width:290px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;}
-.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;}
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px
+        }
 
-/* Panel */
-.panel{background:var(--surface);border:1px solid var(--border2);border-radius:12px;overflow:hidden;}
-.panel-header{padding:12px 16px;border-bottom:1px solid var(--border2);font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;}
-.panel-body{padding:14px 16px;}
+        ::-webkit-scrollbar-track {
+            background: var(--surface)
+        }
 
-/* Upload */
-#upload-zone{border:2px dashed var(--border);border-radius:8px;padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);}
-#upload-zone:hover,#upload-zone.over{border-color:var(--accent);background:rgba(79,156,249,0.06);}
-#file-input{display:none;}
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px
+        }
 
-/* Btn */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .15s;font-family:'DM Sans',sans-serif;}
-.btn-primary{background:var(--accent2);border-color:#2a5ab0;color:#fff;}
-.btn-primary:hover{background:#2a5ab0;}
-.btn-primary:disabled{opacity:.4;cursor:not-allowed;}
-.btn-green{background:#155e4a;border-color:#1a8a6a;color:#fff;}
-.btn-green:hover{background:#1a8a6a;}
-.btn-green:disabled{opacity:.4;cursor:not-allowed;}
-.btn-danger{background:#7f1d1d;border-color:#dc2626;color:#fff;}
-.btn-danger:hover{background:#dc2626;}
-.btn-ghost{background:var(--surface2);border-color:var(--border);color:var(--text2);}
-.btn-ghost:hover{border-color:var(--text3);color:var(--text);}
-.btn-purple{background:#4c1d95;border-color:#7c3aed;color:#fff;}
-.btn-purple:hover{background:#6d28d9;}
-.btn-purple:disabled{opacity:.4;cursor:not-allowed;}
+        ::-webkit-scrollbar-thumb:hover {
+            background: #484f58
+        }
 
-/* File item */
-.file-item{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px;font-size:12px;}
-.file-item.selected{border-color:#1a8a6a;background:rgba(26,138,106,0.08);}
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border2);
+            border-radius: 10px
+        }
 
-/* Form controls */
-select,input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:7px 10px;font-size:12px;width:100%;font-family:'DM Sans',sans-serif;}
-select:focus,input:focus{outline:none;border-color:var(--accent);}
-select option{background:var(--surface2);}
-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:5px;}
+        .panel-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border2);
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px
+        }
 
-/* Tabs */
-.tabs{display:flex;border-bottom:1px solid var(--border2);}
-.tab{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.tab:hover{color:var(--text);}
+        .small {
+            font-size: 12px;
+            color: var(--text3)
+        }
 
-/* Data card grid */
-.result-grid{display:grid;gap:12px;}
-.result-section{border:1px solid var(--border2);border-radius:10px;overflow:hidden;}
-.result-section-head{padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);display:flex;align-items:center;gap:6px;}
-.result-section-body{padding:12px 14px;background:var(--bg);}
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all .15s;
+            border: 1px solid transparent
+        }
 
-/* Eye legend */
-.eye-legend{display:flex;gap:14px;align-items:center;margin-bottom:12px;font-size:12px;}
-.eye-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;}
-.eye-right{background:var(--right);}
-.eye-left{background:var(--left);}
+        .btn:disabled {
+            opacity: .4;
+            cursor: not-allowed
+        }
 
-/* Metric row */
-.metric-row{display:grid;grid-template-columns:1fr 120px 120px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(37,45,61,.5);}
-.metric-row:last-child{border-bottom:none;}
-.metric-name{font-size:12px;color:var(--text2);}
-.metric-val{font-size:13px;font-weight:600;font-family:'DM Mono',monospace;text-align:center;padding:4px 8px;border-radius:5px;}
-.metric-val.right{background:var(--right-bg);color:var(--right);border:1px solid var(--right-border);}
-.metric-val.left{background:var(--left-bg);color:var(--left);border:1px solid var(--left-border);}
-.metric-val.na{color:var(--text3);background:transparent;border:1px solid var(--border2);}
+        .btn-primary {
+            background: var(--accent2);
+            border-color: #388bfd;
+            color: #fff
+        }
 
-/* Detection badges */
-.detect-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.detect-item{border:1px solid var(--border2);border-radius:8px;padding:10px 12px;}
-.detect-label{font-size:11px;color:var(--text3);margin-bottom:4px;}
-.detect-val{font-size:13px;font-weight:700;font-family:'DM Mono',monospace;}
-.detect-pos{color:var(--red);}
-.detect-neg{color:var(--green);}
-.detect-unknown{color:var(--text3);}
+        .btn-primary:hover {
+            background: #388bfd
+        }
 
-/* Analysis section */
-.analysis-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
-.analysis-card{border:1px solid var(--border2);border-radius:8px;padding:10px 12px;background:var(--surface2);}
-.analysis-card-label{font-size:10px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;}
-.analysis-card-val{font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);}
-.analysis-card-unit{font-size:10px;color:var(--text3);margin-top:2px;}
+        .btn-green {
+            background: #238636;
+            border-color: #2ea043;
+            color: #fff
+        }
 
-/* Chart container */
-.chart-wrap{height:300px;position:relative;}
+        .btn-green:hover {
+            background: #2ea043
+        }
 
-/* Comparison table */
-.cmp-table{width:100%;border-collapse:collapse;font-size:12px;}
-.cmp-table th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);background:var(--surface2);border-bottom:1px solid var(--border2);}
-.cmp-table td{padding:7px 10px;border-bottom:1px solid rgba(37,45,61,.4);font-family:'DM Mono',monospace;}
-.cmp-table tr:hover td{background:rgba(255,255,255,.02);}
-.td-right{color:var(--right);font-weight:600;}
-.td-left{color:var(--left);font-weight:600;}
-.td-label{color:var(--text);font-family:'DM Sans',sans-serif;font-weight:500;}
+        .btn-red {
+            background: #b91c1c;
+            border-color: #dc2626;
+            color: #fff
+        }
 
-/* Interpretation */
-#interpretation-output{font-size:13.5px;line-height:1.75;color:var(--text2);white-space:pre-wrap;padding:14px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;min-height:80px;}
-#interpretation-output h3,#interpretation-output h4{color:var(--text);margin-top:14px;margin-bottom:6px;}
-#interpretation-output p{margin-bottom:8px;}
-#interpretation-output strong{color:var(--text);}
-#interpretation-output ul{padding-left:20px;margin-bottom:8px;}
-#interpretation-output li{margin-bottom:3px;}
+        .btn-red:hover {
+            background: #dc2626
+        }
 
-/* Statistical diagnostics (aligned with VNG dashboard patterns) */
-.stat-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:4px;font-size:11px;font-family:'DM Mono',monospace;font-weight:500;}
-.badge-neutral{background:rgba(136,153,187,0.12);color:var(--text2);border:1px solid var(--border2);}
-.badge-good{background:rgba(34,211,165,0.1);color:var(--green);border:1px solid rgba(34,211,165,0.25);}
-.badge-warn{background:rgba(234,179,8,0.1);color:var(--yellow);border:1px solid rgba(234,179,8,0.25);}
-.badge-bad{background:rgba(244,91,91,0.12);color:var(--red);border:1px solid rgba(244,91,91,0.25);}
-.stat-section{border:1px solid var(--border2);border-radius:8px;overflow:hidden;margin-bottom:10px;}
-.stat-section-header{padding:8px 12px;background:var(--surface2);font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;}
-.stat-section-header:hover{color:var(--text);}
-.stat-section-body{padding:10px 12px;background:var(--bg);}
-.stat-row{display:flex;align-items:flex-start;gap:10px;padding:5px 0;border-bottom:1px solid rgba(37,45,61,.5);}
-.stat-row:last-child{border-bottom:none;}
-.stat-label{font-size:11px;color:var(--text3);width:110px;flex-shrink:0;padding-top:1px;font-family:'DM Mono',monospace;}
-.stat-value{font-size:12px;color:var(--text);font-family:'DM Mono',monospace;flex:1;}
-.stat-commentary{font-size:11.5px;color:var(--text2);line-height:1.5;flex:2;font-style:italic;}
-.verdict{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:12px;font-size:10.5px;font-weight:600;font-family:'DM Mono',monospace;}
-.verdict-reject{background:rgba(244,91,91,0.15);color:var(--red);border:1px solid rgba(244,91,91,0.3);}
-.verdict-fail{background:rgba(74,90,122,0.15);color:var(--text3);border:1px solid var(--border2);}
-.stat-tab{padding:6px 12px;font-size:11px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
-.stat-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.stat-tab:hover{color:var(--text);}
-.acc-arrow{transition:transform .2s;display:inline-block;margin-left:auto;font-size:10px;color:var(--text3);}
-.acc-open .acc-arrow{transform:rotate(180deg);}
+        .btn-purple {
+            background: #6f42c1;
+            border-color: #8957e5;
+            color: #fff
+        }
 
-/* Spinner */
-@keyframes spin{to{transform:rotate(360deg);}}
-.spin{animation:spin .8s linear infinite;display:inline-block;}
-.hidden{display:none!important;}
+        .btn-purple:hover {
+            background: #8957e5
+        }
 
-/* Placeholder */
-.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;text-align:center;}
-.placeholder svg{color:var(--text3);margin-bottom:14px;}
-.placeholder h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;}
-.placeholder p{font-size:13px;color:var(--text3);}
+        .btn-ghost {
+            background: var(--surface2);
+            border-color: var(--border);
+            color: var(--text2)
+        }
 
-/* Session selector */
-.session-select{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
-.session-btn{padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;}
-.session-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(79,156,249,.1);}
+        .btn-ghost:hover {
+            border-color: var(--text3);
+            color: var(--text)
+        }
 
-/* Chart type toggle */
-.chart-type-active { border-color: var(--accent) !important; color: var(--accent) !important; background: rgba(79,156,249,0.1) !important; }
-</style>
+        .chart-type-active {
+            border-color: var(--accent) !important;
+            color: var(--accent) !important;
+            background: rgba(88, 166, 255, .12) !important
+        }
+
+        #file-upload-area {
+            border: 2px dashed var(--border);
+            background: var(--surface2);
+            transition: all .2s;
+            cursor: pointer
+        }
+
+        #file-upload-area:hover,
+        #file-upload-area.dragover {
+            border-color: var(--accent);
+            background: rgba(88, 166, 255, .05)
+        }
+
+        .file-card {
+            background: var(--surface2);
+            border: 1px solid var(--border2);
+            border-radius: 8px;
+            padding: 10px;
+            transition: all .2s
+        }
+
+        .file-card.selected {
+            border-color: #238636;
+            background: rgba(35, 134, 54, .08)
+        }
+
+        .reorder-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text2);
+            cursor: pointer
+        }
+
+        .reorder-button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(88, 166, 255, .1)
+        }
+
+        .reorder-button:disabled {
+            opacity: .25;
+            cursor: not-allowed
+        }
+
+        label {
+            font-size: 12px;
+            color: var(--text2);
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500
+        }
+
+        select,
+        input[type="text"] {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 6px;
+            padding: 7px 10px;
+            font-size: 13px;
+            width: 100%;
+            font-family: 'IBM Plex Sans', sans-serif;
+            transition: border-color .15s
+        }
+
+        select:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent)
+        }
+
+        select option {
+            background: var(--surface2)
+        }
+
+        input[type="checkbox"] {
+            accent-color: var(--green);
+            width: 14px;
+            height: 14px;
+            cursor: pointer
+        }
+
+        .stat-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500
+        }
+
+        .badge-neutral {
+            background: rgba(139, 148, 158, .15);
+            color: var(--text2);
+            border: 1px solid var(--border2)
+        }
+
+        .badge-good {
+            background: rgba(63, 185, 80, .12);
+            color: var(--green);
+            border: 1px solid rgba(63, 185, 80, .25)
+        }
+
+        .badge-warn {
+            background: rgba(210, 153, 34, .12);
+            color: var(--yellow);
+            border: 1px solid rgba(210, 153, 34, .25)
+        }
+
+        .badge-bad {
+            background: rgba(248, 81, 73, .12);
+            color: var(--red);
+            border: 1px solid rgba(248, 81, 73, .25)
+        }
+
+        .badge-info {
+            background: rgba(88, 166, 255, .1);
+            color: var(--accent);
+            border: 1px solid rgba(88, 166, 255, .2)
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px
+        }
+
+        .data-table th {
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .07em;
+            color: var(--text3);
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border2);
+            position: sticky;
+            top: 0
+        }
+
+        .data-table td {
+            padding: 7px 12px;
+            border-bottom: 1px solid rgba(48, 54, 61, .4);
+            color: var(--text2);
+            font-family: 'IBM Plex Mono', monospace
+        }
+
+        .data-table tr:hover td {
+            background: rgba(255, 255, 255, .02)
+        }
+
+        .data-table td.td-name {
+            color: var(--text);
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-weight: 500
+        }
+
+        .td-good {
+            color: var(--green) !important;
+            font-weight: 600
+        }
+
+        .td-bad {
+            color: var(--red) !important;
+            font-weight: 700
+        }
+
+        .td-warn {
+            color: var(--yellow) !important;
+            font-weight: 600
+        }
+
+        .flag-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: rgba(248, 81, 73, .16);
+            color: #ff7b72;
+            border: 1px solid rgba(248, 81, 73, .35);
+            font-size: 10px;
+            font-weight: 800
+        }
+
+        .stat-tab {
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text3);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all .15s;
+            white-space: nowrap
+        }
+
+        .stat-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent)
+        }
+
+        .stat-tab:hover {
+            color: var(--text)
+        }
+
+        .stat-section {
+            border: 1px solid var(--border2);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px
+        }
+
+        .stat-section-header {
+            padding: 8px 12px;
+            background: var(--surface2);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text2);
+            text-transform: uppercase;
+            letter-spacing: .08em
+        }
+
+        .stat-section-body {
+            padding: 10px 12px;
+            background: var(--bg)
+        }
+
+        .stat-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(48, 54, 61, .5)
+        }
+
+        .stat-row:last-child {
+            border-bottom: none
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text3);
+            width: 130px;
+            flex-shrink: 0;
+            font-family: 'IBM Plex Mono', monospace
+        }
+
+        .stat-value {
+            font-size: 12px;
+            color: var(--text);
+            font-family: 'IBM Plex Mono', monospace;
+            flex: 1
+        }
+
+        .stat-commentary {
+            font-size: 11.5px;
+            color: var(--text2);
+            line-height: 1.5;
+            flex: 2;
+            font-style: italic
+        }
+
+        #interpretation-output {
+            white-space: pre-wrap;
+            font-size: 13.5px;
+            line-height: 1.7;
+            color: var(--text2)
+        }
+
+        #interpretation-output h3,
+        #interpretation-output h4 {
+            color: var(--text);
+            margin-bottom: 6px;
+            margin-top: 14px
+        }
+
+        #interpretation-output p {
+            margin-bottom: 8px
+        }
+
+        #interpretation-output ul {
+            padding-left: 20px;
+            margin-bottom: 8px
+        }
+
+        #interpretation-output li {
+            margin-bottom: 3px
+        }
+
+        #interpretation-output strong {
+            color: var(--text)
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .animate-spin {
+            animation: spin .8s linear infinite
+        }
+
+        .hidden {
+            display: none !important
+        }
+
+        canvas {
+            background: transparent !important
+        }
+    </style>
 </head>
+
 <body>
-<div class="app">
-
-<!-- Header -->
-<header class="header">
-  <div class="logo">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
-  </div>
-  <div class="header-text">
-    <h1>Pupilometry Analyzer</h1>
-    <p>Clinical pupil response analysis · Multi-session comparison · Statistical diagnostics · AI interpretation</p>
-  </div>
-</header>
-
-<div class="layout">
-
-  <!-- SIDEBAR -->
-  <div class="sidebar">
-
-    <!-- Upload -->
-    <div class="panel">
-      <div class="panel-header">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Upload Reports
-      </div>
-      <div class="panel-body">
-        <div id="upload-zone">
-          <input type="file" id="file-input" accept=".pdf,application/pdf" multiple>
-          <svg style="width:36px;height:36px;color:var(--text3);margin:0 auto 8px;display:block;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 16v-8m0 0l-3 3m3-3l3 3M6 20h12a2 2 0 002-2V8.586a1 1 0 00-.293-.707l-5.586-5.586A1 1 0 0013.414 2H6a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-          <p style="font-size:12px;color:var(--text3);"><span style="color:var(--accent);font-weight:600;">Click to upload</span> or drag & drop</p>
-          <p style="font-size:11px;color:var(--text3);margin-top:3px;">Pupilometry PDF reports</p>
-        </div>
-        <div id="file-list" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
-        <div id="file-actions" class="hidden" style="display:none;gap:8px;margin-top:10px;">
-          <button id="process-btn" class="btn btn-green" style="flex:1;">Process</button>
-          <button id="reset-btn" class="btn btn-danger" style="flex:1;">Reset</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Session selector (multi-session) -->
-    <div id="session-panel" class="panel hidden">
-      <div class="panel-header">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Sessions
-      </div>
-      <div class="panel-body" id="session-list"></div>
-    </div>
-
-  </div>
-
-  <!-- MAIN -->
-  <div class="main">
-
-    <!-- Placeholder -->
-    <div id="placeholder" class="panel placeholder">
-      <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke-width="1.5"/></svg>
-      <h3>No data loaded</h3>
-      <p>Upload one or more pupilometry PDF reports to begin analysis.</p>
-    </div>
-
-    <!-- Loading -->
-    <div id="loading" class="panel placeholder hidden">
-      <svg class="spin" style="width:36px;height:36px;color:var(--accent);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-      <p style="font-size:13px;color:var(--text3);margin-top:12px;">Parsing pupilometry reports…</p>
-    </div>
-
-    <!-- Results -->
-    <div id="results" class="hidden" style="display:flex;flex-direction:column;gap:16px;">
-
-      <!-- Tab nav -->
-      <div class="panel">
-        <div class="tabs" id="main-tabs">
-          <div class="tab active" data-tab="overview">Overview</div>
-          <div class="tab" data-tab="detection">Detection</div>
-          <div class="tab" data-tab="constriction">Constriction</div>
-          <div class="tab" data-tab="dilation">Dilation</div>
-          <div class="tab" data-tab="other">Other Results</div>
-          <div class="tab" data-tab="compare">Compare Sessions</div>
-        </div>
-        <div class="panel-body" id="tab-content">
-          <div class="placeholder" style="padding:30px;">
-            <p style="color:var(--text3);font-size:13px;">Select a session and tab to view data.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Charts panel (for constriction/dilation/other) -->
-      <div id="chart-panel" class="panel hidden">
-        <div class="panel-header" style="justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <span id="chart-title" style="display:flex;align-items:center;gap:8px;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Chart
-          </span>
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div class="eye-legend" style="margin-bottom:0;">
-              <span><span class="eye-dot eye-right"></span>Right Eye</span>
-              <span><span class="eye-dot eye-left"></span>Left Eye</span>
+    <div style="max-width:1440px;margin:0 auto;padding:24px 20px;">
+        <header style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border2);">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+                <div
+                    style="width:32px;height:32px;background:var(--accent2);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                    🧠</div>
+                <h1 style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin:0;">CNSVS
+                    Cognitive Analysis Dashboard</h1>
             </div>
-            <div style="display:flex;gap:4px;">
-              <button id="chart-bar-btn" class="btn btn-ghost chart-type-active" style="font-size:11px;padding:4px 10px;">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="6" width="4" height="15"/><rect x="17" y="3" width="4" height="18"/></svg>
-                Bar
-              </button>
-              <button id="chart-line-btn" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Line
-              </button>
+            <p style="font-size:13px;color:var(--text3);margin-left:44px;">Cognitive → Cognitive Domain Scores ·
+                Specific Test Scores · Four Part Continuous Performance Test · Multi-session comparison</p>
+        </header>
+
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+            <div style="width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;">
+                <div class="panel">
+                    <div class="panel-header">Upload CNSVS Reports</div>
+                    <div style="padding:14px;">
+                        <div id="file-upload-area" style="border-radius:8px;padding:26px 18px;text-align:center;">
+                            <input type="file" id="file-input" multiple accept=".pdf,application/pdf" hidden>
+                            <div style="font-size:36px;margin-bottom:8px;color:var(--text3);">📄</div>
+                            <p style="font-size:12px;color:var(--text3);margin:0;"><span
+                                    style="color:var(--accent);font-weight:500;">Click to upload</span> or drag &amp;
+                                drop</p>
+                            <p style="font-size:11px;color:var(--text3);margin-top:3px;">CNSVS PDF reports</p>
+                        </div>
+                        <p id="file-list-helper" class="hidden"
+                            style="font-size:11px;color:var(--text3);margin-top:10px;">Select files and use ↑ ↓ to
+                            reorder sessions before processing. The graph follows this exact order.</p>
+                        <div id="file-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;"></div>
+                        <div id="file-action-buttons" class="hidden"
+                            style="gap:8px;margin-top:12px;flex-direction:row;">
+                            <button id="process-files-button" class="btn btn-green" style="flex:1;">Process</button>
+                            <button id="reset-button" class="btn btn-red" style="flex:1;">Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="controls-section" class="panel hidden">
+                    <div class="panel-header">Analysis Controls</div>
+                    <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
+                        <div><label>Test Name</label><select id="group-select"></select></div>
+                        <div><label>Field / Section</label><select id="section-select"></select></div>
+                        <div><label>Field Value / Metric</label><select id="metric-select"></select></div>
+                    </div>
+                </div>
+
+                <div id="session-section" class="panel hidden">
+                    <div class="panel-header" style="justify-content:space-between;"><span>Graph Files</span><span
+                            class="stat-badge badge-info">select + reorder</span></div>
+                    <div id="session-list"
+                        style="padding:12px;display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;">
+                    </div>
+                </div>
+
+                <div id="flagged-sidebar" class="panel hidden">
+                    <div class="panel-header" style="justify-content:space-between;"><span>Flagged</span><span
+                            class="stat-badge badge-bad">Percentile &lt; 30</span></div>
+                    <div id="flagged-list"
+                        style="padding:12px;max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="chart-wrap"><canvas id="main-chart"></canvas></div>
-        </div>
-      </div>
 
-      <!-- Statistical Diagnostics -->
-      <div class="panel" id="stats-panel">
-        <div class="panel-header" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <span style="display:flex;align-items:center;gap:8px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-4"/></svg>
-            Statistical Diagnostics
-          </span>
-          <button type="button" id="run-stats-btn" class="btn btn-purple" style="font-size:11px;padding:4px 12px;">
-            <svg id="stats-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707"/></svg>
-            <svg id="stats-loading" class="spin hidden" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-width="4" class="opacity-25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            Run Diagnostics
-          </button>
-        </div>
-        <div style="display:flex;gap:0;padding:0 16px;border-bottom:1px solid var(--border2);overflow-x:auto;" id="stat-tabs">
-          <div class="stat-tab active" data-tab="descriptive">Descriptive</div>
-          <div class="stat-tab" data-tab="inferential">Inferential</div>
-          <div class="stat-tab" data-tab="correlation">Correlation</div>
-          <div class="stat-tab" data-tab="regression">Regression</div>
-          <div class="stat-tab" data-tab="multivariate">Multivariate</div>
-          <div class="stat-tab" data-tab="longitudinal">Longitudinal</div>
-        </div>
-        <div class="panel-body" style="padding-top:12px;" id="stats-content">
-          <p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics across uploaded sessions (numeric fields only; right/left pairs are analyzed separately).</p>
-        </div>
-      </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;">
+                <div id="placeholder" class="panel" style="padding:60px 24px;text-align:center;">
+                    <div style="font-size:48px;margin-bottom:12px;color:var(--text3);">🧠</div>
+                    <h3 style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Waiting for data
+                    </h3>
+                    <p style="font-size:13px;color:var(--text3);">Upload CNSVS PDF reports to begin cognitive analysis.
+                    </p>
+                </div>
 
-      <!-- Clinical Interpretation -->
-      <div class="panel">
-        <div class="panel-header" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <span style="display:flex;align-items:center;gap:8px;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-            Clinical Interpretation
-          </span>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="full-report-btn" class="btn btn-purple">
-              <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-              <span id="full-report-btn-text">Full Report</span>
-              <svg id="full-report-loading" class="spin hidden" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-width="4" class="opacity-25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            </button>
-            <button type="button" id="interpretation-button" class="btn btn-primary">
-              <svg id="interpret-icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707"/></svg>
-              <svg id="interpret-loading" class="spin hidden" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-width="4" class="opacity-25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-              <span id="interpret-button-text">Interpret View</span>
-            </button>
-            <button type="button" id="exec-summary-btn" class="btn btn-green">
-              <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-              <span id="exec-summary-btn-text">Executive Summary</span>
-              <svg id="exec-summary-loading" class="spin hidden" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-width="4" class="opacity-25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            </button>
-            <button type="button" id="edit-interpretation-btn" class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" disabled title="Edit the generated report">Edit</button>
-            <button type="button" id="save-edit-btn" class="btn btn-green hidden" style="font-size:12px;padding:6px 12px;">Save</button>
-            <button type="button" id="cancel-edit-btn" class="btn btn-ghost hidden" style="font-size:12px;padding:6px 12px;">Cancel</button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div id="interpretation-output">Click a button above for AI interpretation. Requests go to the server route /api/messages (set ANTHROPIC_API_KEY and ANTHROPIC_MODEL on the server).</div>
-        </div>
-      </div>
+                <div id="loading" class="panel hidden" style="padding:60px 24px;text-align:center;">
+                    <svg style="width:36px;height:36px;color:var(--accent);margin:0 auto 12px;" class="animate-spin"
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                    <p style="font-size:13px;color:var(--text3);">Parsing CNSVS reports…</p>
+                </div>
 
+                <div id="results-section" class="hidden" style="display:flex;flex-direction:column;gap:16px;">
+                    <div class="panel">
+                        <div class="panel-header" style="justify-content:space-between;">
+                            <span>Visualization</span>
+                            <div style="display:flex;gap:6px;"><button id="export-png-btn" class="btn btn-ghost"
+                                    style="font-size:11px;padding:4px 10px;">⬇ PNG</button><button id="export-csv-btn"
+                                    class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">⬇ CSV</button></div>
+                        </div>
+                        <div style="padding:16px;">
+                            <div id="chart-type-wrap"
+                                style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap;"><span
+                                    style="font-size:11px;color:var(--text3);">Chart:</span><button type="button"
+                                    id="chart-bar-btn" class="btn btn-ghost chart-type-active"
+                                    style="font-size:11px;padding:4px 10px;">Bar</button><button type="button"
+                                    id="chart-line-btn" class="btn btn-ghost"
+                                    style="font-size:11px;padding:4px 10px;">Line</button></div>
+                            <div id="chart-container" style="position:relative;height:360px;"><canvas
+                                    id="results-chart"></canvas></div>
+                            <p
+                                style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">
+                                Graph uses only selected files in the order shown under Graph Files. Dataset 1 =
+                                percentile. Dataset 2 = standard score.</p>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">Selected Field Values</div>
+                        <div id="summary-table-container"
+                            style="padding:16px;overflow-x:auto;max-height:420px;overflow-y:auto;"></div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">Complete Grouped Data</div>
+                        <div id="grouped-table-container"
+                            style="padding:16px;overflow-x:auto;max-height:560px;overflow-y:auto;"></div>
+                    </div>
+
+                    <div class="panel" id="stats-panel">
+                        <div class="panel-header" style="justify-content:space-between;align-items:center;">
+                            <span>Statistical Diagnostics</span>
+                            <button id="run-stats-btn" class="btn btn-purple"
+                                style="font-size:11px;padding:4px 12px;">Run Diagnostics</button>
+                        </div>
+                        <div style="display:flex;gap:0;padding:0 16px;border-bottom:1px solid var(--border2);overflow-x:auto;"
+                            id="stat-tabs">
+                            <div class="stat-tab active" data-tab="descriptive">Descriptive</div>
+                            <div class="stat-tab" data-tab="inferential">Inferential</div>
+                            <div class="stat-tab" data-tab="correlation">Correlation</div>
+                            <div class="stat-tab" data-tab="regression">Regression</div>
+                            <div class="stat-tab" data-tab="multivariate">Multivariate</div>
+                            <div class="stat-tab" data-tab="longitudinal">Longitudinal</div>
+                        </div>
+                        <div style="padding:14px;" id="stats-content">
+                            <p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong
+                                    style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the
+                                current selected field.</p>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header"
+                            style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                            <span>Clinical Interpretation</span>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <button id="full-report-btn" class="btn btn-purple"><span id="full-report-btn-text">Full
+                                        Report</span></button>
+                                <button id="interpretation-button" class="btn btn-primary"><span
+                                        id="interpret-button-text">Interpret View</span></button>
+                                <button id="exec-summary-btn" class="btn btn-green"><span
+                                        id="exec-summary-btn-text">Executive Summary</span></button>
+                                <button type="button" id="edit-interpretation-btn" class="btn btn-ghost"
+                                    style="font-size:12px;padding:6px 12px;" disabled>Edit</button>
+                                <button type="button" id="save-edit-btn" class="btn btn-green hidden"
+                                    style="font-size:12px;padding:6px 12px;">Save</button>
+                                <button type="button" id="cancel-edit-btn" class="btn btn-ghost hidden"
+                                    style="font-size:12px;padding:6px 12px;">Cancel</button>
+                            </div>
+                        </div>
+                        <div style="padding:16px;">
+                            <div id="interpretation-output"
+                                style="padding:14px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;min-height:80px;">
+                                Click a button to generate an AI-powered clinical interpretation.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
-</div>
-</div>
 
-<script>
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    <script type="module">
+        if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
+        Chart.defaults.color = '#8b949e';
+        Chart.defaults.borderColor = '#30363d';
 
-// ---- State ----
-let sessions = [];      // Array of parsed session objects
-let currentSession = 0; // Index of viewed session
-let mainChart = null;
-let currentTab = 'overview';
-let currentChartType = 'bar';           // 'bar' | 'line'
-let lastChartLabels = [], lastChartR = [], lastChartL = [];  // cache for re-rendering on type toggle
-let activeStatTab = 'descriptive';
-let lastInterpretationRaw = '';
-let interpretationEditMode = false;
-const AI_REQUEST_DEFAULTS = { maxTokens: 1800 };
+        const FLAG_THRESHOLD = 30;
+        const AI_REQUEST_DEFAULTS = { maxTokens: 3000 };
+        const GROUP_ORDER = ['Cognitive', 'Specific Test Scores', 'Four Part Continuous Performance Test'];
+        const DOMAIN_SECTION = 'Cognitive Domain Scores';
+        const DOMAIN_ORDER = ['Neurocognition Index (NCI)', 'Composite Memory', 'Verbal Memory', 'Visual Memory', 'Psychomotor Speed', 'Reaction Time', 'Complex Attention', 'Cognitive Flexibility', 'Processing Speed', 'Executive Function', 'Social Acuity', 'Reasoning', 'Working Memory', 'Sustained Attention', 'Simple Attention', 'Motor Speed'];
+        const SPECIFIC_TEST_NAMES = ['Verbal Memory Test (VBM)', 'Visual Memory Test (VSM)', 'Finger Tapping Test (FTT)', 'Symbol Digit Coding (SDC)', 'Stroop Test (ST)', 'Shifting Attention Test (SAT)', 'Continuous Performance Test (CPT)', 'Perception Of Emotions Test (POET)', 'Positive Emotions', 'Negative Emotions', 'Reasoning Test (RT)'];
+        const FOUR_PART_NAMES = ['Part 1', 'Part 2', 'Part 3', 'Part 4'];
+        const CHART_COLORS = [
+            { bg: 'rgba(88,166,255,.32)', border: 'rgba(88,166,255,1)', solid: '#58a6ff' },
+            { bg: 'rgba(63,185,80,.25)', border: 'rgba(63,185,80,1)', solid: '#3fb950' },
+            { bg: 'rgba(248,81,73,.25)', border: 'rgba(248,81,73,1)', solid: '#f85149' },
+            { bg: 'rgba(188,140,255,.25)', border: 'rgba(188,140,255,1)', solid: '#bc8cff' }
+        ];
 
-// ---- DOM ----
-const uploadZone = document.getElementById('upload-zone');
-const fileInput = document.getElementById('file-input');
-const fileList = document.getElementById('file-list');
-const fileActions = document.getElementById('file-actions');
-const processBtn = document.getElementById('process-btn');
-const resetBtn = document.getElementById('reset-btn');
-const placeholder = document.getElementById('placeholder');
-const loading = document.getElementById('loading');
-const results = document.getElementById('results');
-const sessionPanel = document.getElementById('session-panel');
-const sessionList = document.getElementById('session-list');
-const tabContent = document.getElementById('tab-content');
-const chartPanel = document.getElementById('chart-panel');
-const chartTitle = document.getElementById('chart-title');
-const mainChartEl = document.getElementById('main-chart');
-const interpretationOutput = document.getElementById('interpretation-output');
-const fullReportBtn = document.getElementById('full-report-btn');
-const interpretationButton = document.getElementById('interpretation-button');
-const execSummaryBtn = document.getElementById('exec-summary-btn');
-const editInterpretationBtn = document.getElementById('edit-interpretation-btn');
-const saveEditBtn = document.getElementById('save-edit-btn');
-const cancelEditBtn = document.getElementById('cancel-edit-btn');
-const statsContent = document.getElementById('stats-content');
-const runStatsBtn = document.getElementById('run-stats-btn');
-const chartBarBtn = document.getElementById('chart-bar-btn');
-const chartLineBtn = document.getElementById('chart-line-btn');
+        let uploadedSessions = [];
+        let allSessions = [];
+        let resultsChart = null;
+        let chartStyle = 'bar';
+        let activeStatTab = 'descriptive';
+        let lastInterpretationRaw = '';
+        let interpretationEditMode = false;
 
-// Chart type toggle
-chartBarBtn.addEventListener('click', () => {
-  currentChartType = 'bar';
-  chartBarBtn.classList.add('chart-type-active');
-  chartLineBtn.classList.remove('chart-type-active');
-  if (lastChartLabels.length) renderChart(lastChartLabels, lastChartR, lastChartL);
-});
-chartLineBtn.addEventListener('click', () => {
-  currentChartType = 'line';
-  chartLineBtn.classList.add('chart-type-active');
-  chartBarBtn.classList.remove('chart-type-active');
-  if (lastChartLabels.length) renderChart(lastChartLabels, lastChartR, lastChartL);
-});
+        const $ = id => document.getElementById(id);
+        const fileInput = $('file-input');
+        const fileUploadArea = $('file-upload-area');
+        const fileListHelper = $('file-list-helper');
+        const fileList = $('file-list');
+        const fileActionButtons = $('file-action-buttons');
+        const processFilesButton = $('process-files-button');
+        const resetButton = $('reset-button');
+        const controlsSection = $('controls-section');
+        const sessionSection = $('session-section');
+        const sessionList = $('session-list');
+        const groupSelect = $('group-select');
+        const sectionSelect = $('section-select');
+        const metricSelect = $('metric-select');
+        const placeholder = $('placeholder');
+        const loading = $('loading');
+        const resultsSection = $('results-section');
+        const chartCanvas = $('results-chart');
+        const chartBarBtn = $('chart-bar-btn');
+        const chartLineBtn = $('chart-line-btn');
+        const summaryTableContainer = $('summary-table-container');
+        const groupedTableContainer = $('grouped-table-container');
+        const flaggedSidebar = $('flagged-sidebar');
+        const flaggedList = $('flagged-list');
+        const exportPngBtn = $('export-png-btn');
+        const exportCsvBtn = $('export-csv-btn');
+        const runStatsBtn = $('run-stats-btn');
+        const statsContent = $('stats-content');
+        const statTabs = $('stat-tabs');
+        const interpretationOutput = $('interpretation-output');
+        const fullReportBtn = $('full-report-btn');
+        const interpretationButton = $('interpretation-button');
+        const execSummaryBtn = $('exec-summary-btn');
+        const editInterpretationBtn = $('edit-interpretation-btn');
+        const saveEditBtn = $('save-edit-btn');
+        const cancelEditBtn = $('cancel-edit-btn');
 
-// ---- Upload ----
-uploadZone.addEventListener('click', () => fileInput.click());
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('over'); });
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('over'));
-uploadZone.addEventListener('drop', e => {
-  e.preventDefault(); uploadZone.classList.remove('over');
-  handleFiles(e.dataTransfer.files);
-});
-fileInput.addEventListener('change', () => handleFiles(fileInput.files));
-
-// ---- Parsed files staging ----
-let stagedFiles = [];
-
-function handleFiles(files) {
-  const pdfs = Array.from(files).filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
-  if (!pdfs.length) return;
-  pdfs.forEach(f => {
-    if (!stagedFiles.find(sf => sf.name === f.name)) stagedFiles.push(f);
-  });
-  renderFileList();
-}
-
-function renderFileList() {
-  fileList.innerHTML = '';
-  stagedFiles.forEach((f, i) => {
-    const el = document.createElement('div');
-    el.className = 'file-item selected';
-    el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;">
-      <span style="font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">${f.name}</span>
-      <button data-i="${i}" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;" class="rm-file">×</button>
-    </div>`;
-    fileList.appendChild(el);
-  });
-  fileList.querySelectorAll('.rm-file').forEach(btn => {
-    btn.addEventListener('click', e => {
-      stagedFiles.splice(parseInt(e.target.dataset.i), 1);
-      renderFileList();
-      if (!stagedFiles.length) fileActions.style.display = 'none';
-    });
-  });
-  if (stagedFiles.length > 0) {
-    fileActions.style.display = 'flex';
-    fileActions.classList.remove('hidden');
-    processBtn.textContent = `Process (${stagedFiles.length})`;
-  }
-}
-
-processBtn.addEventListener('click', async () => {
-  if (!stagedFiles.length) return;
-  showLoading();
-  try {
-    const parsed = await Promise.all(stagedFiles.map(f => parsePupilometryPDF(f)));
-    sessions = parsed.filter(Boolean);
-    if (sessions.length) {
-      currentSession = 0;
-      showResults();
-    } else {
-      alert('No valid pupilometry data found in the uploaded files.');
-      showPlaceholder();
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Error parsing files: ' + err.message);
-    showPlaceholder();
-  }
-});
-
-resetBtn.addEventListener('click', () => {
-  sessions = []; stagedFiles = []; currentSession = 0;
-  fileInput.value = ''; fileList.innerHTML = '';
-  fileActions.style.display = 'none';
-  statsContent.dataset.computed = '';
-  statsContent.innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics across uploaded sessions (numeric fields only; right/left pairs are analyzed separately).</p>';
-  interpretationOutput.textContent = 'Click a button under Clinical Interpretation for AI analysis (server /api/messages with ANTHROPIC_API_KEY).';
-  lastInterpretationRaw = '';
-  leaveInterpretationEditView();
-  editInterpretationBtn.disabled = true;
-  showPlaceholder();
-});
-
-function showPlaceholder() { placeholder.classList.remove('hidden'); loading.classList.add('hidden'); results.classList.add('hidden'); sessionPanel.classList.add('hidden'); }
-function showLoading() { placeholder.classList.add('hidden'); loading.classList.remove('hidden'); results.classList.add('hidden'); }
-function showResults() {
-  placeholder.classList.add('hidden'); loading.classList.add('hidden');
-  results.classList.remove('hidden');
-  statsContent.dataset.computed = '';
-  statsContent.innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics across uploaded sessions (numeric fields only; right/left pairs are analyzed separately).</p>';
-  buildSessionList();
-  renderTab(currentTab);
-}
-
-// ---- Session list ----
-function buildSessionList() {
-  if (sessions.length <= 1) { sessionPanel.classList.add('hidden'); return; }
-  sessionPanel.classList.remove('hidden');
-  sessionList.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'session-select';
-  sessions.forEach((s, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'session-btn' + (i === currentSession ? ' active' : '');
-    btn.textContent = s.label || `Session ${i+1}`;
-    btn.addEventListener('click', () => { currentSession = i; buildSessionList(); renderTab(currentTab); });
-    wrap.appendChild(btn);
-  });
-  sessionList.appendChild(wrap);
-}
-
-// ---- Tab nav ----
-document.getElementById('main-tabs').addEventListener('click', e => {
-  const tab = e.target.dataset.tab;
-  if (!tab) return;
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  currentTab = tab;
-  renderTab(tab);
-});
-
-function renderTab(tab) {
-  interpretationOutput.textContent = 'Click a button under Clinical Interpretation to generate an AI-powered analysis.';
-  lastInterpretationRaw = '';
-  leaveInterpretationEditView();
-  editInterpretationBtn.disabled = true;
-  if (tab === 'compare') {
-    renderCompareTab();
-    chartPanel.classList.add('hidden');
-    return;
-  }
-  const s = sessions[currentSession];
-  if (!s) return;
-
-  if (tab === 'overview') { renderOverview(s); chartPanel.classList.add('hidden'); }
-  else if (tab === 'detection') { renderDetection(s); chartPanel.classList.add('hidden'); }
-  else if (tab === 'constriction') { renderConstriction(s); }
-  else if (tab === 'dilation') { renderDilation(s); }
-  else if (tab === 'other') { renderOther(s); chartPanel.classList.add('hidden'); }
-}
-
-// ---- Renderers ----
-
-function renderOverview(s) {
-  const analysis = s.tests['Analysis'] || {};
-  const fields = Object.entries(analysis).filter(([k]) => !isSupressed(k));
-  if (!fields.length) {
-    tabContent.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:12px 0;">No Analysis section found in this report.</p>';
-    return;
-  }
-  const paired = [], singles = [];
-  fields.forEach(([k, v]) => {
-    if (v && typeof v === 'object' && ('right' in v || 'left' in v)) paired.push({ name: k, right: v.right, left: v.left });
-    else singles.push({ name: k, value: v });
-  });
-  let html = `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Report: <strong style="color:var(--text);">${s.label}</strong></div>`;
-  if (paired.length) {
-    html += `<table class="cmp-table" style="margin-bottom:14px;"><thead><tr>
-      <th>Metric</th><th style="color:var(--right);">Right (R)</th><th style="color:var(--left);">Left (L)</th>
-    </tr></thead><tbody>`;
-    paired.forEach(p => {
-      html += `<tr><td class="td-label">${p.name}</td>
-        <td class="td-right">${p.right !== undefined ? formatScalar(p.right) : '—'}</td>
-        <td class="td-left">${p.left !== undefined ? formatScalar(p.left) : '—'}</td></tr>`;
-    });
-    html += '</tbody></table>';
-  }
-  if (singles.length) {
-    html += `<div class="analysis-grid">${singles.map(({ name, value }) =>
-      `<div class="analysis-card"><div class="analysis-card-label">${name}</div><div class="analysis-card-val">${formatScalar(value)}</div></div>`
-    ).join('')}</div>`;
-  }
-  tabContent.innerHTML = html;
-}
-
-function renderDetection(s) {
-  const d = s.tests['Detection'] || {};
-  const FIELDS = ['Alpha Omega', 'Anisocoria', 'Miosis', 'Mydriasis', 'Tonic Pupil'];
-  let html = `<div class="detect-grid">`;
-  FIELDS.forEach(f => {
-    const raw = d[f];
-    const val = raw !== undefined ? String(raw) : 'N/A';
-    const isPos = /^(yes|positive|true|1|present|detected)/i.test(val);
-    const isNeg = /^(no|negative|false|0|absent|not detected)/i.test(val);
-    const cls = isPos ? 'detect-pos' : isNeg ? 'detect-neg' : 'detect-unknown';
-    html += `<div class="detect-item">
-      <div class="detect-label">${f}</div>
-      <div class="detect-val ${cls}">${val}</div>
-    </div>`;
-  });
-  html += `</div>`;
-  // Also show any other detection fields not in our list
-  const extras = Object.entries(d).filter(([k]) => !FIELDS.includes(k));
-  if (extras.length) {
-    html += `<div style="margin-top:12px;border-top:1px solid var(--border2);padding-top:12px;">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;">Additional Fields</div>
-      <div class="detect-grid">${extras.map(([k, v]) => `
-        <div class="detect-item"><div class="detect-label">${k}</div><div class="detect-val">${v}</div></div>`).join('')}</div>
-    </div>`;
-  }
-  tabContent.innerHTML = html;
-}
-
-function renderConstriction(s) {
-  const d = s.tests['Constrict Results'] || {};
-  const FIELDS = ['Avg. Constriction Speed', 'Constriction Time', 'Max. Constriction Speed'];
-  renderEyeResults(s, d, FIELDS, 'Constriction Results');
-}
-
-function renderDilation(s) {
-  const d = s.tests['Dilation Results'] || {};
-  const FIELDS = ['Avg. Dilation Speed', 'Release Amplitude', '75% Recover Time'];
-  renderEyeResults(s, d, FIELDS, 'Dilation Results');
-}
-
-// Fields to suppress — only exact standalone "Reflex" label and "Produced with Reflex" watermark
-// "Reflex Score" and "Neuro CDS Score" must NOT be suppressed
-const SUPPRESS_PATTERNS = [/^reflex$/i, /produced\s+with\s+reflex/i];
-function isSupressed(key) { return SUPPRESS_PATTERNS.some(re => re.test(key.trim())); }
-
-function renderEyeResults(s, data, fields, sectionTitle) {
-  const rightVals = [], leftVals = [], labels = [];
-
-  let tableHtml = `
-    <div class="eye-legend" style="margin-bottom:10px;">
-      <span><span class="eye-dot eye-right"></span>Right Eye</span>
-      <span><span class="eye-dot eye-left"></span>Left Eye</span>
-    </div>
-    <table class="cmp-table" style="margin-bottom:0;">
-      <thead><tr>
-        <th>Metric</th>
-        <th style="color:var(--right);">Right Eye</th>
-        <th style="color:var(--left);">Left Eye</th>
-      </tr></thead><tbody>`;
-
-  fields.forEach(f => {
-    if (isSupressed(f)) return;
-    const entry = data[f] || {};
-    const r = entry.right;
-    const l = entry.left;
-    labels.push(f);
-    rightVals.push(toNum(r));
-    leftVals.push(toNum(l));
-    tableHtml += `<tr>
-      <td class="td-label">${f}</td>
-      <td class="td-right">${r !== undefined ? formatScalar(r) : '—'}</td>
-      <td class="td-left">${l !== undefined ? formatScalar(l) : '—'}</td>
-    </tr>`;
-  });
-
-  // Extra fields not in the main list
-  const shownSet = new Set(fields);
-  Object.entries(data).forEach(([k, v]) => {
-    if (shownSet.has(k) || isSupressed(k) || /normative/i.test(k)) return;
-    if (v && typeof v === 'object' && ('right' in v || 'left' in v)) {
-      tableHtml += `<tr>
-        <td class="td-label" style="color:var(--text3);">${k}</td>
-        <td class="td-right">${v.right !== undefined ? formatScalar(v.right) : '—'}</td>
-        <td class="td-left">${v.left !== undefined ? formatScalar(v.left) : '—'}</td>
-      </tr>`;
-    } else {
-      tableHtml += `<tr><td class="td-label" style="color:var(--text3);">${k}</td><td colspan="2" style="color:var(--text2);">${formatScalar(v)}</td></tr>`;
-    }
-  });
-
-  tableHtml += '</tbody></table>';
-  tabContent.innerHTML = tableHtml;
-
-  if (rightVals.some(v => v !== null) || leftVals.some(v => v !== null)) {
-    chartPanel.classList.remove('hidden');
-    chartTitle.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> ${sectionTitle}`;
-    renderChart(labels, rightVals, leftVals);
-  } else {
-    chartPanel.classList.add('hidden');
-  }
-}
-
-function renderOther(s) {
-  const d = s.tests['Other Results'] || {};
-  const entries = Object.entries(d).filter(([k]) => !/normative/i.test(k) && !isSupressed(k));
-  if (!entries.length) {
-    tabContent.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:12px 0;">No Other Results data found in this report.</p>';
-    chartPanel.classList.add('hidden');
-    return;
-  }
-
-  // Always render as 3-col table (Metric / Right / Left).
-  // For scalar values, span the right/left cols with a single value.
-  const chartLabels = [], chartR = [], chartL = [];
-
-  let html = `
-    <div class="eye-legend" style="margin-bottom:10px;">
-      <span><span class="eye-dot eye-right"></span>Right Eye</span>
-      <span><span class="eye-dot eye-left"></span>Left Eye</span>
-    </div>
-    <table class="cmp-table"><thead><tr>
-      <th>Field</th>
-      <th style="color:var(--right);">Right (R)</th>
-      <th style="color:var(--left);">Left (L)</th>
-    </tr></thead><tbody>`;
-
-  entries.forEach(([k, v]) => {
-    if (v && typeof v === 'object' && ('right' in v || 'left' in v)) {
-      html += `<tr>
-        <td class="td-label">${k}</td>
-        <td class="td-right">${v.right !== undefined ? formatScalar(v.right) : '—'}</td>
-        <td class="td-left">${v.left !== undefined ? formatScalar(v.left) : '—'}</td>
-      </tr>`;
-      // Only add to chart if both sides have numeric values
-      const rn = toNum(v.right), ln = toNum(v.left);
-      if (rn !== null || ln !== null) {
-        chartLabels.push(k);
-        chartR.push(rn);
-        chartL.push(ln);
-      }
-    } else {
-      // Single value — show in right col, left col gets dash
-      const n = toNum(v);
-      html += `<tr>
-        <td class="td-label">${k}</td>
-        <td style="color:var(--text2);font-family:'DM Mono',monospace;" colspan="2">${formatScalar(v)}</td>
-      </tr>`;
-    }
-  });
-
-  html += '</tbody></table>';
-  tabContent.innerHTML = html;
-
-  if (chartLabels.length) {
-    chartPanel.classList.remove('hidden');
-    chartTitle.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Other Results`;
-    renderChart(chartLabels, chartR, chartL);
-  } else {
-    chartPanel.classList.add('hidden');
-  }
-}
-
-function renderCompareTab() {
-  if (sessions.length < 2) {
-    tabContent.innerHTML = '<div class="comparison-banner" style="color:var(--text3);">Upload 2+ sessions to compare results across visits.</div>';
-    return;
-  }
-
-  const SECTIONS = ['Constrict Results', 'Dilation Results'];
-  let html = '';
-
-  SECTIONS.forEach(section => {
-    // Collect all metric names (not the raw keys, since those are now the field names directly)
-    const allFields = new Set();
-    sessions.forEach(s => {
-      const d = s.tests[section] || {};
-      Object.keys(d).filter(k => !/normative/i.test(k)).forEach(k => allFields.add(k));
-    });
-    if (!allFields.size) return;
-
-    html += `<div class="result-section" style="margin-bottom:12px;">
-      <div class="result-section-head">${section}</div>
-      <div class="result-section-body" style="overflow-x:auto;">
-        <table class="cmp-table">
-          <thead><tr>
-            <th>Metric</th><th>Eye</th>
-            ${sessions.map((s, i) => `<th style="color:var(--accent);">${s.label || `Session ${i+1}`}</th>`).join('')}
-          </tr></thead><tbody>`;
-
-    Array.from(allFields).forEach(field => {
-      // Right row
-      html += `<tr><td class="td-label" rowspan="2">${field}</td><td style="color:var(--right);font-size:11px;font-weight:700;">R</td>`;
-      sessions.forEach(s => {
-        const v = s.tests[section]?.[field];
-        const val = v && typeof v === 'object' ? (v.right !== undefined ? formatScalar(v.right) : '—') : (v !== undefined ? formatScalar(v) : '—');
-        html += `<td class="td-right">${val}</td>`;
-      });
-      html += '</tr>';
-      // Left row
-      html += `<tr><td style="color:var(--left);font-size:11px;font-weight:700;">L</td>`;
-      sessions.forEach(s => {
-        const v = s.tests[section]?.[field];
-        const val = v && typeof v === 'object' ? (v.left !== undefined ? formatScalar(v.left) : '—') : '—';
-        html += `<td class="td-left">${val}</td>`;
-      });
-      html += '</tr>';
-    });
-
-    html += '</tbody></table></div></div>';
-  });
-
-  // Detection comparison
-  const DETECT_FIELDS = ['Alpha Omega', 'Anisocoria', 'Miosis', 'Mydriasis', 'Tonic Pupil'];
-  const anyDetect = sessions.some(s => s.tests['Detection'] && Object.keys(s.tests['Detection']).length);
-  if (anyDetect) {
-    html += `<div class="result-section">
-      <div class="result-section-head">Detection</div>
-      <div class="result-section-body" style="overflow-x:auto;">
-        <table class="cmp-table">
-          <thead><tr>
-            <th>Finding</th>
-            ${sessions.map((s, i) => `<th style="color:var(--accent);">${s.label || `Session ${i+1}`}</th>`).join('')}
-          </tr></thead><tbody>`;
-    DETECT_FIELDS.forEach(f => {
-      html += `<tr><td class="td-label">${f}</td>`;
-      sessions.forEach(s => {
-        const v = s.tests['Detection']?.[f];
-        const isPos = v !== undefined && /^(yes|positive|true|1|present|detected)/i.test(String(v));
-        const isNeg = v !== undefined && /^(no|negative|false|0|absent|not detected)/i.test(String(v));
-        const color = isPos ? 'var(--red)' : isNeg ? 'var(--green)' : 'var(--text3)';
-        html += `<td style="color:${color};font-family:'DM Mono',monospace;font-weight:600;">${v !== undefined ? v : '—'}</td>`;
-      });
-      html += '</tr>';
-    });
-    html += '</tbody></table></div></div>';
-  }
-
-  if (!html) html = '<p style="color:var(--text3);font-size:13px;">No comparable data sections found across sessions.</p>';
-  tabContent.innerHTML = html;
-  chartPanel.classList.add('hidden');
-}
-
-function formatScalar(v) {
-  if (v === undefined || v === null) return '—';
-  const n = parseFloat(v);
-  if (isNaN(n)) return String(v);
-  return n % 1 === 0 ? n.toString() : n.toFixed(3);
-}
-
-// ---- Chart ----
-function renderChart(labels, rightVals, leftVals) {
-  // Cache for re-rendering on type toggle
-  lastChartLabels = labels;
-  lastChartR = rightVals;
-  lastChartL = leftVals;
-
-  if (mainChart) { mainChart.destroy(); mainChart = null; }
-
-  const shortLabels = labels.map(l => l.length > 22 ? l.substring(0, 20) + '…' : l);
-  const isLine = currentChartType === 'line';
-
-  const baseDataset = {
-    borderWidth: isLine ? 2.5 : 1.5,
-    pointRadius: isLine ? 5 : 0,
-    pointHoverRadius: isLine ? 7 : 0,
-    tension: 0.35,
-    fill: false,
-  };
-
-  mainChart = new Chart(mainChartEl, {
-    type: isLine ? 'line' : 'bar',
-    data: {
-      labels: shortLabels,
-      datasets: [
-        {
-          ...baseDataset,
-          label: 'Right Eye',
-          data: rightVals.map(v => v !== null ? v : null),
-          backgroundColor: isLine ? 'rgba(74,222,204,0.15)' : 'rgba(74,222,204,0.7)',
-          borderColor: 'rgba(74,222,204,1)',
-          pointBackgroundColor: 'rgba(74,222,204,1)',
-          borderRadius: isLine ? 0 : 4,
-          hidden: rightVals.every(v => v === null),
-        },
-        {
-          ...baseDataset,
-          label: 'Left Eye',
-          data: leftVals.map(v => v !== null ? v : null),
-          backgroundColor: isLine ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.7)',
-          borderColor: 'rgba(249,115,22,1)',
-          pointBackgroundColor: 'rgba(249,115,22,1)',
-          borderRadius: isLine ? 0 : 4,
-          hidden: leftVals.every(v => v === null),
+        function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+        function labelOf(s) { return (s.label || s.pdf_name || 'Session').replace(/\.pdf$/i, ''); }
+        function toNum(v) { const n = parseFloat(String(v)); return Number.isFinite(n) ? n : undefined; }
+        function nfmt(v, d = 2) { const n = toNum(v); return n === undefined ? '—' : Number.isInteger(n) ? String(n) : n.toFixed(d).replace(/\.00$/, ''); }
+        function percentileClass(p) { const n = toNum(p); if (n === undefined) return ''; if (n < FLAG_THRESHOLD) return 'td-bad'; if (n < 50) return 'td-warn'; return 'td-good'; }
+        function scoreClass(row) { return (toNum(row?.percentile) ?? 100) < FLAG_THRESHOLD ? 'td-bad' : 'td-good'; }
+        function mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : undefined; }
+        function median(arr) { if (!arr.length) return undefined; const s = [...arr].sort((a, b) => a - b), m = Math.floor(s.length / 2); return s.length % 2 ? (s[m]) : (s[m - 1] + s[m]) / 2; }
+        function sdSample(arr) { if (arr.length < 2) return undefined; const m = mean(arr); return Math.sqrt(arr.map(x => (x - m) ** 2).reduce((a, b) => a + b, 0) / (arr.length - 1)); }
+        function quantile(sorted, q) { if (!sorted.length) return undefined; const pos = (sorted.length - 1) * q, base = Math.floor(pos), rest = pos - base; return sorted[base + 1] === undefined ? sorted[base] : sorted[base] + rest * (sorted[base + 1] - sorted[base]); }
+        function pearson(x, y) { if (x.length !== y.length || x.length < 2) return undefined; const mx = mean(x), my = mean(y); const num = x.reduce((a, v, i) => a + (v - mx) * (y[i] - my), 0); const den = Math.sqrt(x.reduce((a, v) => a + (v - mx) ** 2, 0) * y.reduce((a, v) => a + (v - my) ** 2, 0)); return den ? num / den : 0; }
+        function rankTies(vals) { const p = vals.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v), r = new Array(vals.length); let i = 0; while (i < p.length) { let j = i; while (j + 1 < p.length && p[j + 1].v === p[i].v) j++; const avg = (i + 1 + j + 1) / 2; for (let k = i; k <= j; k++)r[p[k].i] = avg; i = j + 1; } return r; }
+        function spearman(x, y) { if (x.length !== y.length || x.length < 2) return undefined; return pearson(rankTies(x), rankTies(y)); }
+        function linReg(x, y) { if (x.length !== y.length || x.length < 2) return undefined; const mx = mean(x), my = mean(y); const sxx = x.reduce((a, v) => a + (v - mx) ** 2, 0); if (!sxx) return undefined; const sxy = x.reduce((a, v, i) => a + (v - mx) * (y[i] - my), 0); const slope = sxy / sxx, intercept = my - slope * mx; const yhat = x.map(v => intercept + slope * v), ssTot = y.reduce((a, v) => a + (v - my) ** 2, 0), ssRes = y.reduce((a, v, i) => a + (v - yhat[i]) ** 2, 0); return { slope, intercept, r2: ssTot ? 1 - ssRes / ssTot : 0 }; }
+        function descStats(vals) { const n = vals.map(toNum).filter(v => v !== undefined); if (!n.length) return undefined; const s = [...n].sort((a, b) => a - b), m = mean(n), sd = sdSample(n), q25 = quantile(s, .25), q75 = quantile(s, .75); return { n: n.length, mean: m, median: median(n), sd, min: s[0], max: s[s.length - 1], q25, q75, iqr: q75 - q25, range: s[s.length - 1] - s[0], cv: (m && sd !== undefined) ? sd / Math.abs(m) * 100 : undefined }; }
+        function sectionRows(session, group, section) { return (((session.groups || {})[group] || {})[section] || []).map(normalizeRow).filter(Boolean); }
+        function normalizeRow(row) { if (!row) return null; const metric = row.metric || row.domain || row.name || row.label || ''; if (!metric) return null; const ss = toNum(row.standard_score ?? row.score ?? row.StandardScore ?? row['Standard Score']); const perc = toNum(row.percentile ?? row.Percentile); return { metric, domain: row.domain || metric, standard_score: ss, percentile: perc, flagged: row.flagged === true || (perc !== undefined && perc < FLAG_THRESHOLD) }; }
+        function emptyGroups() { return { Cognitive: { [DOMAIN_SECTION]: [] }, 'Specific Test Scores': Object.fromEntries(SPECIFIC_TEST_NAMES.map(x => [x, []])), 'Four Part Continuous Performance Test': Object.fromEntries(FOUR_PART_NAMES.map(x => [x, []])) }; }
+        function isDomainName(name) { const n = String(name || '').toLowerCase(); return DOMAIN_ORDER.some(d => d.toLowerCase() === n || d.toLowerCase().includes(n) || n.includes(d.toLowerCase())); }
+        function normalizeSession(raw, fallbackName = 'Session.pdf') {
+            const s = raw || {}; const groups = emptyGroups();
+            if (s.groups) { GROUP_ORDER.forEach(g => Object.entries(s.groups[g] || {}).forEach(([sec, rows]) => { groups[g][sec] = (Array.isArray(rows) ? rows : []).map(normalizeRow).filter(Boolean); })); }
+            if (!groups.Cognitive[DOMAIN_SECTION].length && Array.isArray(s.domain_scores)) { groups.Cognitive[DOMAIN_SECTION] = s.domain_scores.map(x => normalizeRow({ ...x, metric: x.domain || x.metric })).filter(Boolean); }
+            Object.entries(s.tests || {}).forEach(([name, rows]) => {
+                const clean = name === 'Four Part Continuous Performance Test (FPCPT)' ? 'Four Part Continuous Performance Test' : name;
+                const arr = (Array.isArray(rows) ? rows : []).map(normalizeRow).filter(Boolean);
+                if (SPECIFIC_TEST_NAMES.includes(clean)) groups['Specific Test Scores'][clean] = arr;
+                else if (FOUR_PART_NAMES.includes(clean)) groups['Four Part Continuous Performance Test'][clean] = arr;
+                else if (clean === 'Four Part Continuous Performance Test') splitFourPartRows(arr, groups);
+            });
+            if (!groups.Cognitive[DOMAIN_SECTION].length && Array.isArray(s.domain_scores)) groups.Cognitive[DOMAIN_SECTION] = s.domain_scores.map(normalizeRow).filter(Boolean);
+            return { pdf_name: s.pdf_name || fallbackName, label: (s.label || s.pdf_name || fallbackName).replace(/\.pdf$/i, ''), groups, domain_scores: groups.Cognitive[DOMAIN_SECTION], tests: { ...groups['Specific Test Scores'], ...groups['Four Part Continuous Performance Test'] }, selected: true };
         }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      spanGaps: true,
-      plugins: {
-        legend: {
-          labels: { color: '#8899bb', font: { family: "'DM Sans'" }, boxWidth: 12, boxHeight: 12, borderRadius: 6 }
-        },
-        tooltip: {
-          backgroundColor: '#0e1219',
-          borderColor: '#252d3d',
-          borderWidth: 1,
-          titleColor: '#e2e8f7',
-          bodyColor: '#8899bb',
-          callbacks: {
-            label: ctx => ctx.raw !== null ? `${ctx.dataset.label}: ${ctx.raw}` : null
-          }
+        function splitFourPartRows(rows, groups) { rows.forEach(r => { const m = String(r.metric || ''); const pm = m.match(/^Part\s*([1-4])\s+(.+)$/i); if (pm) { const p = `Part ${pm[1]}`; groups['Four Part Continuous Performance Test'][p].push({ ...r, metric: pm[2].trim() }); } }); }
+        function hasRows(group, section) { return allSessions.some(s => sectionRows(s, group, section).length); }
+        function selectedSessions() { return allSessions.filter(s => s.selected !== false); }
+        function availableMetrics(group, section) { const set = new Set(); selectedSessions().forEach(s => sectionRows(s, group, section).forEach(r => set.add(r.metric))); return [...set]; }
+        function getSelectedRow(session) { const g = groupSelect.value, sec = sectionSelect.value, m = metricSelect.value; return sectionRows(session, g, sec).find(r => r.metric === m); }
+        function resetStatsAndInterpretation() { statsContent.dataset.computed = ''; statsContent.innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the current selected field.</p>'; setInterpretationMarkdown(''); interpretationOutput.textContent = 'Click a button to generate an AI-powered clinical interpretation.'; leaveInterpretationEditView(); }
+        function fmtInline(text) { let e = esc(text); e = e.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); e = e.replace(/\*(.+?)\*/g, '<em>$1</em>'); return e; }
+        function renderMd(md) { const lines = String(md || '').replace(/\r\n/g, '\n').split('\n'); const out = []; let p = [], li = []; const fp = () => { if (p.length) { out.push(`<p>${p.join('<br>')}</p>`); p = []; } }; const fl = () => { if (li.length) { out.push(`<ul>${li.join('')}</ul>`); li = []; } }; for (const raw of lines) { const ln = raw.trim(); if (!ln) { fp(); fl(); continue; } const hm = ln.match(/^(#{1,6})\s+(.*)$/); if (hm) { fp(); fl(); const lv = Math.min(hm[1].length + 2, 6); out.push(`<h${lv} style="font-weight:600;color:var(--text);margin-bottom:5px;margin-top:12px;">${fmtInline(hm[2])}</h${lv}>`); continue; } const bm = ln.match(/^[-*]\s+(.*)$/); if (bm) { fp(); li.push(`<li>${fmtInline(bm[1])}</li>`); continue; } fl(); p.push(fmtInline(ln)); } fp(); fl(); return out.join('') || `<p>${esc(md || '')}</p>`; }
+        function setInterpretationMarkdown(text) { lastInterpretationRaw = String(text || ''); if (lastInterpretationRaw.trim()) interpretationOutput.innerHTML = renderMd(lastInterpretationRaw); editInterpretationBtn.disabled = !lastInterpretationRaw.trim() || interpretationEditMode; }
+        function leaveInterpretationEditView() { interpretationEditMode = false; saveEditBtn.classList.add('hidden'); cancelEditBtn.classList.add('hidden'); editInterpretationBtn.classList.remove('hidden'); }
+        function flushInterpretationEditBeforeGenerate() { if (!interpretationEditMode) return; const ta = $('interpretation-editor'); if (ta) setInterpretationMarkdown(ta.value); leaveInterpretationEditView(); fullReportBtn.disabled = false; interpretationButton.disabled = false; execSummaryBtn.disabled = false; editInterpretationBtn.disabled = !lastInterpretationRaw.trim(); }
+
+        fileUploadArea.addEventListener('click', () => fileInput.click());
+        fileUploadArea.addEventListener('dragover', e => { e.preventDefault(); fileUploadArea.classList.add('dragover'); });
+        fileUploadArea.addEventListener('dragleave', () => fileUploadArea.classList.remove('dragover'));
+        fileUploadArea.addEventListener('drop', e => { e.preventDefault(); fileUploadArea.classList.remove('dragover'); handleChosenFiles(e.dataTransfer.files); });
+        fileInput.addEventListener('change', e => handleChosenFiles(e.target.files));
+        resetButton.addEventListener('click', resetAll);
+        processFilesButton.addEventListener('click', () => { allSessions = uploadedSessions.filter(s => s.selected !== false); if (!allSessions.length) return; afterProcess(); });
+
+        groupSelect.addEventListener('change', () => { populateSections(); resetStatsAndInterpretation(); renderAll(); });
+        sectionSelect.addEventListener('change', () => { populateMetrics(); resetStatsAndInterpretation(); renderAll(); });
+        metricSelect.addEventListener('change', () => { resetStatsAndInterpretation(); renderAll(); });
+        chartBarBtn.addEventListener('click', () => { chartStyle = 'bar'; syncChartButtons(); renderChartAndTable(); });
+        chartLineBtn.addEventListener('click', () => { chartStyle = 'line'; syncChartButtons(); renderChartAndTable(); });
+        exportPngBtn.addEventListener('click', () => { if (!resultsChart) return; const a = document.createElement('a'); a.href = resultsChart.toBase64Image(); a.download = 'cnsvs-chart.png'; a.click(); });
+        exportCsvBtn.addEventListener('click', exportCsv);
+        runStatsBtn.addEventListener('click', () => { statsContent.dataset.computed = '1'; renderStats(); });
+        statTabs.querySelectorAll('.stat-tab').forEach(tab => tab.addEventListener('click', () => { statTabs.querySelectorAll('.stat-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); activeStatTab = tab.dataset.tab; if (statsContent.dataset.computed) renderStats(); }));
+        fullReportBtn.addEventListener('click', generateFullReport);
+        interpretationButton.addEventListener('click', generateInterpretView);
+        execSummaryBtn.addEventListener('click', generateExecutiveSummary);
+        editInterpretationBtn.addEventListener('click', () => { if (!lastInterpretationRaw.trim()) return; interpretationEditMode = true; editInterpretationBtn.classList.add('hidden'); saveEditBtn.classList.remove('hidden'); cancelEditBtn.classList.remove('hidden'); fullReportBtn.disabled = true; interpretationButton.disabled = true; execSummaryBtn.disabled = true; interpretationOutput.innerHTML = `<textarea id="interpretation-editor" spellcheck="true" style="width:100%;min-height:220px;padding:12px;font-size:13px;font-family:inherit;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);resize:vertical;line-height:1.5;">${esc(lastInterpretationRaw)}</textarea>`; $('interpretation-editor')?.focus(); });
+        saveEditBtn.addEventListener('click', () => { const ta = $('interpretation-editor'); if (ta) setInterpretationMarkdown(ta.value); leaveInterpretationEditView(); fullReportBtn.disabled = false; interpretationButton.disabled = false; execSummaryBtn.disabled = false; editInterpretationBtn.disabled = !lastInterpretationRaw.trim(); });
+        cancelEditBtn.addEventListener('click', () => { leaveInterpretationEditView(); interpretationOutput.innerHTML = renderMd(lastInterpretationRaw); fullReportBtn.disabled = false; interpretationButton.disabled = false; execSummaryBtn.disabled = false; editInterpretationBtn.disabled = !lastInterpretationRaw.trim(); });
+
+        async function handleChosenFiles(filesLike) {
+            const pdfs = [...filesLike].filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+            if (!pdfs.length) { fileList.innerHTML = '<p class="small" style="color:var(--red);">No PDF files selected.</p>'; return; }
+            placeholder.classList.add('hidden'); resultsSection.classList.add('hidden'); loading.classList.remove('hidden'); fileList.innerHTML = ''; uploadedSessions = []; processFilesButton.disabled = true;
+            try { uploadedSessions = await parseFiles(pdfs); renderUploadList(); fileActionButtons.classList.remove('hidden'); fileActionButtons.style.display = 'flex'; fileListHelper.classList.remove('hidden'); processFilesButton.disabled = !uploadedSessions.some(s => s.selected !== false); } catch (e) { console.error(e); placeholder.classList.remove('hidden'); fileList.innerHTML = `<p class="small" style="color:var(--red);">Error: ${esc(e.message)}</p>`; } finally { loading.classList.add('hidden'); }
         }
-      },
-      scales: {
-        x: {
-          grid: { color: 'rgba(37,45,61,0.5)' },
-          ticks: { color: '#8899bb', font: { family: "'DM Sans'", size: 11 } }
-        },
-        y: {
-          grid: { color: 'rgba(37,45,61,0.5)' },
-          ticks: { color: '#8899bb', font: { family: "'DM Mono'", size: 11 } },
-          beginAtZero: false
+        async function parseFiles(files) { const fd = new FormData(); files.forEach(f => fd.append('files', f, f.name)); const res = await fetch('/parse-cnsvs', { method: 'POST', body: fd }); if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || err.error?.message || `HTTP ${res.status}`); } const data = await res.json(); return data.map((s, i) => normalizeSession(s, files[i]?.name)); }
+        function renderUploadList() { fileList.innerHTML = uploadedSessions.map((s, i) => `<div class="file-card ${s.selected !== false ? 'selected' : ''}"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" data-i="${i}" ${s.selected !== false ? 'checked' : ''} style="width:auto;"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(labelOf(s))}</div><div class="small">${countScores(s)} score rows</div></div><button class="reorder-button" data-act="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button class="reorder-button" data-act="down" data-i="${i}" ${i === uploadedSessions.length - 1 ? 'disabled' : ''}>↓</button></div></div>`).join(''); fileList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', e => { uploadedSessions[+e.target.dataset.i].selected = e.target.checked; processFilesButton.disabled = !uploadedSessions.some(s => s.selected !== false); renderUploadList(); })); fileList.querySelectorAll('.reorder-button').forEach(btn => btn.addEventListener('click', e => { const i = +e.currentTarget.dataset.i, act = e.currentTarget.dataset.act, j = act === 'up' ? i - 1 : i + 1; if (j < 0 || j >= uploadedSessions.length) return;[uploadedSessions[i], uploadedSessions[j]] = [uploadedSessions[j], uploadedSessions[i]]; renderUploadList(); })); }
+        function renderSessionList() { sessionList.innerHTML = allSessions.map((s, i) => `<div class="file-card ${s.selected !== false ? 'selected' : ''}"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" data-i="${i}" ${s.selected !== false ? 'checked' : ''} style="width:auto;"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(labelOf(s))}</div><div class="small">Graph order: ${i + 1}</div></div><button class="reorder-button" data-act="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button class="reorder-button" data-act="down" data-i="${i}" ${i === allSessions.length - 1 ? 'disabled' : ''}>↓</button></div></div>`).join(''); sessionList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', e => { allSessions[+e.target.dataset.i].selected = e.target.checked; resetStatsAndInterpretation(); renderSessionList(); renderAll(); })); sessionList.querySelectorAll('.reorder-button').forEach(btn => btn.addEventListener('click', e => { const i = +e.currentTarget.dataset.i, act = e.currentTarget.dataset.act, j = act === 'up' ? i - 1 : i + 1; if (j < 0 || j >= allSessions.length) return;[allSessions[i], allSessions[j]] = [allSessions[j], allSessions[i]]; resetStatsAndInterpretation(); renderSessionList(); renderAll(); })); }
+        function countScores(s) { let c = 0; GROUP_ORDER.forEach(g => Object.values(s.groups[g] || {}).forEach(rows => c += (rows || []).length)); return c; }
+        function afterProcess() { controlsSection.classList.remove('hidden'); sessionSection.classList.remove('hidden'); flaggedSidebar.classList.remove('hidden'); resultsSection.classList.remove('hidden'); placeholder.classList.add('hidden'); loading.classList.add('hidden'); allSessions.forEach(s => s.selected = true); populateControls(); renderSessionList(); renderAll(); }
+        function resetAll() { uploadedSessions = []; allSessions = []; if (resultsChart) { resultsChart.destroy(); resultsChart = null; } fileInput.value = ''; fileList.innerHTML = ''; sessionList.innerHTML = ''; fileActionButtons.classList.add('hidden'); fileActionButtons.style.display = 'none'; fileListHelper.classList.add('hidden'); controlsSection.classList.add('hidden'); sessionSection.classList.add('hidden'); flaggedSidebar.classList.add('hidden'); resultsSection.classList.add('hidden'); loading.classList.add('hidden'); placeholder.classList.remove('hidden'); }
+        function populateControls() { groupSelect.innerHTML = GROUP_ORDER.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(''); populateSections(); }
+        function populateSections() { const g = groupSelect.value; let secs = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES); const avail = secs.filter(sec => hasRows(g, sec)); sectionSelect.innerHTML = (avail.length ? avail : secs).map(sec => `<option value="${esc(sec)}">${esc(sec)}</option>`).join(''); populateMetrics(); }
+        function populateMetrics() { const g = groupSelect.value, sec = sectionSelect.value; const ms = availableMetrics(g, sec); metricSelect.innerHTML = ms.length ? ms.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('') : '<option value="">No field values found</option>'; }
+        function syncChartButtons() { chartBarBtn.classList.toggle('chart-type-active', chartStyle === 'bar'); chartLineBtn.classList.toggle('chart-type-active', chartStyle === 'line'); }
+        function renderAll() { if (!allSessions.length) return; renderSessionList(); renderChartAndTable(); renderGroupedTable(); renderFlaggedSidebar(); if (statsContent.dataset.computed) renderStats(); }
+        function renderChartAndTable() { const sessions = selectedSessions(), g = groupSelect.value, sec = sectionSelect.value, m = metricSelect.value; if (resultsChart) { resultsChart.destroy(); resultsChart = null; } if (!sessions.length || !m) { summaryTableContainer.innerHTML = '<p class="small">Select at least one file and metric.</p>'; return; } const rows = sessions.map(s => ({ session: s, row: getSelectedRow(s) })); const ctx = chartCanvas.getContext('2d'); const type = chartStyle === 'line' ? 'line' : 'bar'; const common = { borderWidth: 2, tension: .25, spanGaps: true, pointRadius: type === 'line' ? 4 : 3 }; resultsChart = new Chart(ctx, { type, data: { labels: rows.map(x => labelOf(x.session)), datasets: [{ label: 'Percentile', data: rows.map(x => x.row?.percentile ?? null), backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, yAxisID: 'y', ...common }, { label: 'Standard Score', data: rows.map(x => x.row?.standard_score ?? null), backgroundColor: CHART_COLORS[1].bg, borderColor: CHART_COLORS[1].border, yAxisID: 'y1', ...common }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `${g} → ${sec} → ${m}`, color: '#e6edf3', font: { size: 14, weight: '600' } }, legend: { labels: { color: '#8b949e' } }, tooltip: { backgroundColor: '#1c2330', borderColor: '#30363d', borderWidth: 1, titleColor: '#e6edf3', bodyColor: '#8b949e', callbacks: { afterLabel: (ctx) => { const r = rows[ctx.dataIndex].row; return r?.flagged ? 'FLAG: Percentile < 30' : ''; } } } }, scales: { x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y: { min: 0, max: 100, title: { display: true, text: 'Percentile', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y1: { position: 'right', title: { display: true, text: 'Standard Score', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { drawOnChartArea: false } } } } }); summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr><th>Order</th><th>File</th><th>Test Name</th><th>Field / Section</th><th>Metric</th><th>Standard Score</th><th>Percentile</th><th>Flag</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td class="td-name">${esc(labelOf(x.session))}</td><td>${esc(g)}</td><td>${esc(sec)}</td><td class="td-name">${esc(m)}</td><td class="${scoreClass(x.row)}">${nfmt(x.row?.standard_score)}</td><td class="${percentileClass(x.row?.percentile)}">${nfmt(x.row?.percentile)}</td><td>${x.row?.flagged ? '<span class="flag-pill">FLAG</span>' : '—'}</td></tr>`).join('')}</tbody></table>`; }
+        function renderGroupedTable() { let html = '<table class="data-table"><thead><tr><th>File</th><th>Test Name</th><th>Field / Section</th><th>Field Value / Metric</th><th>Standard Score</th><th>Percentile</th><th>Flag</th></tr></thead><tbody>'; selectedSessions().forEach(s => { GROUP_ORDER.forEach(g => { const sections = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES); sections.forEach(sec => sectionRows(s, g, sec).forEach(r => { html += `<tr><td class="td-name">${esc(labelOf(s))}</td><td>${esc(g)}</td><td>${esc(sec)}</td><td class="td-name">${esc(r.metric)}</td><td class="${scoreClass(r)}">${nfmt(r.standard_score)}</td><td class="${percentileClass(r.percentile)}">${nfmt(r.percentile)}</td><td>${r.flagged ? '<span class="flag-pill">FLAG</span>' : '—'}</td></tr>`; })); }); }); html += '</tbody></table>'; groupedTableContainer.innerHTML = html; }
+        function renderFlaggedSidebar() { const items = []; allSessions.forEach(s => GROUP_ORDER.forEach(g => { const sections = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES); sections.forEach(sec => sectionRows(s, g, sec).forEach(r => { if (r.flagged) items.push({ s, g, sec, r }); })); })); flaggedList.innerHTML = items.length ? items.map(x => `<div style="padding:8px;border:1px solid var(--border2);border-radius:6px;background:rgba(248,81,73,.07);"><div style="font-size:12px;color:var(--text);font-weight:600;">${esc(x.r.metric)}</div><div class="small">${esc(labelOf(x.s))} · ${esc(x.sec)}</div><div style="font-size:11px;color:var(--red);margin-top:3px;">Percentile ${nfmt(x.r.percentile)} | SS ${nfmt(x.r.standard_score)}</div></div>`).join('') : '<p class="small">No flagged values found.</p>'; }
+        function currentSeries() { return selectedSessions().map((s, i) => ({ i, s, row: getSelectedRow(s) })).filter(x => x.row); }
+        function renderStats() {
+            const rows = currentSeries(), p = rows.map(x => x.row.percentile).filter(v => v !== undefined), ss = rows.map(x => x.row.standard_score).filter(v => v !== undefined); if (!rows.length) { statsContent.innerHTML = '<p class="small">No numeric data for selected field.</p>'; return; } const dsP = descStats(p), dsS = descStats(ss); const idx = rows.map(x => x.i + 1); let html = ''; if (activeStatTab === 'descriptive') { html += statSection('Percentile Descriptive', statRows(dsP)); html += statSection('Standard Score Descriptive', statRows(dsS)); }
+            else if (activeStatTab === 'inferential') { const first = rows[0].row.percentile, last = rows[rows.length - 1].row.percentile, delta = (last ?? 0) - (first ?? 0); const sdv = sdSample(p); const z = sdv ? delta / sdv : undefined; html += statSection('Change Inference', [['First → Last', `${nfmt(first)} → ${nfmt(last)}`, 'Absolute percentile change across selected ordered sessions.'], ['Delta', nfmt(delta), 'Positive means percentile improved; negative means percentile declined.'], ['Effect Size (Δ/SD)', nfmt(z), 'Rule of thumb only; small samples are descriptive, not confirmatory.'], ['Flag Burden', `${rows.filter(x => x.row.flagged).length}/${rows.length}`, 'Number of sessions below percentile threshold.']]); }
+            else if (activeStatTab === 'correlation') { const rp = pearson(idx, p), rsp = spearman(idx, p), rss = pearson(p, ss); html += statSection('Correlation', [['Session Order vs Percentile', nfmt(rp), 'Pearson correlation across selected file order.'], ['Spearman Trend', nfmt(rsp), 'Rank-based monotonic trend across sessions.'], ['Percentile vs Standard Score', nfmt(rss), 'Association between percentile and standard score.']]); }
+            else if (activeStatTab === 'regression') { const regP = linReg(idx, p), regS = linReg(idx, ss); html += statSection('Linear Regression', [['Percentile Slope', nfmt(regP?.slope), 'Average percentile change per selected session step.'], ['Percentile R²', nfmt(regP?.r2), 'Proportion of percentile variance explained by session order.'], ['Standard Score Slope', nfmt(regS?.slope), 'Average standard score change per selected session step.'], ['Standard Score R²', nfmt(regS?.r2), 'Proportion of standard score variance explained by session order.']]); }
+            else if (activeStatTab === 'multivariate') { const flagged = rows.filter(x => x.row.flagged).length; html += statSection('Multivariate Snapshot', [['Variables Used', 'Percentile + Standard Score', 'Current CNSVS field combines both values.'], ['Mean Percentile / SS', `${nfmt(dsP?.mean)} / ${nfmt(dsS?.mean)}`, 'Combined central tendency.'], ['CV Percentile / SS', `${nfmt(dsP?.cv)}% / ${nfmt(dsS?.cv)}%`, 'Higher CV suggests more variability.'], ['Flag Rate', `${nfmt(flagged / rows.length * 100)}%`, 'Share of selected sessions below percentile 30.']]); }
+            else { const deltas = rows.slice(1).map((x, i) => ({ from: labelOf(rows[i].s), to: labelOf(x.s), d: (x.row.percentile ?? 0) - (rows[i].row.percentile ?? 0) })); html += statSection('Longitudinal Pattern', [['Sessions Included', String(rows.length), 'Only checked files are included, in the displayed order.'], ['Net Change', nfmt((rows.at(-1).row.percentile ?? 0) - (rows[0].row.percentile ?? 0)), 'Last percentile minus first percentile.'], ['Largest Step Change', deltas.length ? `${deltas.sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0].from} → ${deltas[0].to}: ${nfmt(deltas[0].d)}` : '—', 'Largest session-to-session percentile movement.'], ['Direction', trendText(p), 'Overall directional pattern.']]); }
+            statsContent.innerHTML = html;
         }
-      }
-    }
-  });
-}
-
-// ---- AI interpretation, markdown, statistics (adapted from VNG pop.html) ----
-const PUPILOMETRY_SECTION_ORDER = ['Analysis', 'Detection', 'Constrict Results', 'Dilation Results', 'Other Results'];
-const PUPILOMETRY_METRIC_DIRECTION = {
-  /* Optional: mark whether higher or lower is generally favorable for trend wording */
-};
-
-function escapeHtml(v) {
-  return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-function fmtInline(text) {
-  let e = escapeHtml(text);
-  e = e.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  e = e.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  return e;
-}
-function renderMd(md) {
-  const lines = String(md || '').replace(/\r\n/g, '\n').split('\n');
-  const out = [];
-  let pLines = [], liItems = [];
-  const flushP = () => { if (!pLines.length) return; out.push(`<p>${pLines.join('<br>')}</p>`); pLines = []; };
-  const flushL = () => { if (!liItems.length) return; out.push(`<ul style="padding-left:18px;margin-bottom:8px;">${liItems.join('')}</ul>`); liItems = []; };
-  for (const raw of lines) {
-    const ln = raw.trim();
-    if (!ln) { flushP(); flushL(); continue; }
-    const hm = ln.match(/^(#{1,6})\s+(.*)$/);
-    if (hm) { flushP(); flushL(); const lv = Math.min(hm[1].length + 2, 6); out.push(`<h${lv} style="font-weight:600;color:var(--text);margin-bottom:5px;margin-top:12px;">${fmtInline(hm[2])}</h${lv}>`); continue; }
-    const bm = ln.match(/^[-*]\s+(.*)$/);
-    if (bm) { flushP(); liItems.push(`<li>${fmtInline(bm[1])}</li>`); continue; }
-    flushL(); pLines.push(fmtInline(ln));
-  }
-  flushP(); flushL();
-  return out.join('') || `<p>${escapeHtml(md || '')}</p>`;
-}
-
-function setInterpretationMarkdown(text) {
-  lastInterpretationRaw = String(text || '');
-  interpretationOutput.innerHTML = renderMd(lastInterpretationRaw);
-  const has = !!lastInterpretationRaw.trim();
-  editInterpretationBtn.disabled = !has || interpretationEditMode;
-}
-
-function leaveInterpretationEditView() {
-  interpretationEditMode = false;
-  saveEditBtn.classList.add('hidden');
-  cancelEditBtn.classList.add('hidden');
-  editInterpretationBtn.classList.remove('hidden');
-}
-
-function flushInterpretationEditBeforeGenerate() {
-  if (!interpretationEditMode) return;
-  const ta = document.getElementById('interpretation-editor');
-  if (ta) setInterpretationMarkdown(ta.value);
-  leaveInterpretationEditView();
-  fullReportBtn.disabled = false;
-  interpretationButton.disabled = false;
-  execSummaryBtn.disabled = false;
-  editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
-}
-
-function sortTestConditions(values) {
-  return [...values].sort((a, b) => {
-    const ai = PUPILOMETRY_SECTION_ORDER.indexOf(a), bi = PUPILOMETRY_SECTION_ORDER.indexOf(b);
-    const na = ai === -1 ? 999 : ai, nb = bi === -1 ? 999 : bi;
-    if (na !== nb) return na - nb;
-    return a.localeCompare(b);
-  });
-}
-
-function flattenSessionTests(session) {
-  const out = {};
-  const sections = Object.keys(session.tests || {});
-  sections.forEach(sec => {
-    const block = session.tests[sec];
-    if (!block || typeof block !== 'object') return;
-    out[sec] = { metrics: {} };
-    Object.entries(block).forEach(([k, v]) => {
-      if (/normative/i.test(k) || isSupressed(k)) return;
-      if (v && typeof v === 'object' && ('right' in v || 'left' in v)) {
-        if (v.right !== undefined && Number.isFinite(Number(v.right))) out[sec].metrics[`${k} (Right)`] = Number(v.right);
-        if (v.left !== undefined && Number.isFinite(Number(v.left))) out[sec].metrics[`${k} (Left)`] = Number(v.left);
-      } else {
-        const n = statsToNum(v);
-        if (n !== undefined) out[sec].metrics[k] = n;
-      }
-    });
-  });
-  return out;
-}
-
-function rebuildMetricSets() {
-  const allParsedData = sessions.map((s, idx) => ({
-    label: (s.label && String(s.label).trim()) ? s.label : `Session ${idx + 1}`,
-    tests: flattenSessionTests(s)
-  }));
-  const allMetrics = new Set();
-  const allTestConditions = new Set();
-  allParsedData.forEach(d => {
-    Object.keys(d.tests || {}).forEach(tk => {
-      allTestConditions.add(tk);
-      const m = d.tests[tk]?.metrics;
-      if (m) Object.keys(m).forEach(mm => allMetrics.add(mm));
-    });
-  });
-  return { allParsedData, allMetrics, allTestConditions };
-}
-
-function statsToNum(v) {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') { const n = parseFloat(v); return Number.isFinite(n) ? n : undefined; }
-  return undefined;
-}
-function numSeries(vals) { return vals.map(statsToNum).filter(v => v !== undefined); }
-function mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : undefined; }
-function median(arr) {
-  if (!arr.length) return undefined;
-  const s = [...arr].sort((a, b) => a - b), m = Math.floor(s.length / 2);
-  return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
-}
-function sdSample(arr) {
-  if (arr.length < 2) return undefined;
-  const m = mean(arr);
-  return Math.sqrt(arr.map(x => (x - m) ** 2).reduce((a, b) => a + b, 0) / (arr.length - 1));
-}
-function quantile(sorted, q) {
-  const pos = (sorted.length - 1) * q, base = Math.floor(pos), rest = pos - base;
-  return sorted[base + 1] === undefined ? sorted[base] : sorted[base] + rest * (sorted[base + 1] - sorted[base]);
-}
-function descStats(vals) {
-  const n = numSeries(vals); if (!n.length) return undefined;
-  const s = [...n].sort((a, b) => a - b), m = mean(n), sd = sdSample(n), med = median(n);
-  const q25 = quantile(s, 0.25), q75 = quantile(s, 0.75), iqr = q75 - q25;
-  const cv = (m && m !== 0 && sd !== undefined) ? (sd / Math.abs(m)) * 100 : undefined;
-  const skew = n.length >= 3 && sd ? n.reduce((a, v) => a + ((v - m) / sd) ** 3, 0) / n.length : undefined;
-  return { n: n.length, mean: m, median: med, sd, min: s[0], max: s[s.length - 1], q25, q75, iqr, cv, range: s[s.length - 1] - s[0], skew };
-}
-function pearson(x, y) {
-  if (x.length !== y.length || x.length < 2) return undefined;
-  const mx = mean(x), my = mean(y);
-  const num = x.reduce((a, v, i) => a + (v - mx) * (y[i] - my), 0);
-  const den = Math.sqrt(x.reduce((a, v) => a + (v - mx) ** 2, 0) * y.reduce((a, v) => a + (v - my) ** 2, 0));
-  return den ? num / den : 0;
-}
-function rankTies(vals) {
-  const p = vals.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v), r = new Array(vals.length);
-  let i = 0;
-  while (i < p.length) {
-    let j = i;
-    while (j + 1 < p.length && p[j + 1].v === p[i].v) j++;
-    const avg = (i + 1 + (j + 1)) / 2;
-    for (let k = i; k <= j; k++) r[p[k].i] = avg;
-    i = j + 1;
-  }
-  return r;
-}
-function spearman(x, y) { if (x.length !== y.length || x.length < 2) return undefined; return pearson(rankTies(x), rankTies(y)); }
-function linReg(x, y) {
-  if (x.length !== y.length || x.length < 2) return undefined;
-  const mx = mean(x), my = mean(y);
-  const sxx = x.reduce((a, v) => a + (v - mx) ** 2, 0); if (!sxx) return undefined;
-  const sxy = x.reduce((a, v, i) => a + (v - mx) * (y[i] - my), 0);
-  const b = sxy / sxx, a2 = my - b * mx;
-  const yH = x.map(v => a2 + b * v), ssTot = y.reduce((a, v) => a + (v - my) ** 2, 0), ssRes = y.reduce((a, v, i) => a + (v - yH[i]) ** 2, 0);
-  return { intercept: a2, slope: b, r2: ssTot ? 1 - ssRes / ssTot : 0 };
-}
-function shuffle(arr) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function permPCorr(x, y, iters = 300) {
-  const obs = pearson(x, y); if (obs === undefined) return undefined;
-  const absObs = Math.abs(obs); let c = 0;
-  for (let i = 0; i < iters; i++) { const r = pearson(x, shuffle(y)); if (r !== undefined && Math.abs(r) >= absObs) c++; }
-  return c / iters;
-}
-function permPSlope(x, y, iters = 300) {
-  const obs = linReg(x, y); if (!obs) return undefined;
-  const absObs = Math.abs(obs.slope); let c = 0;
-  for (let i = 0; i < iters; i++) { const r = linReg(x, shuffle(y)); if (r && Math.abs(r.slope) >= absObs) c++; }
-  return c / iters;
-}
-function permPMeanDiff(a, b, iters = 300) {
-  const av = numSeries(a), bv = numSeries(b);
-  if (av.length < 2 || bv.length < 2) return undefined;
-  const obs = mean(bv) - mean(av), absObs = Math.abs(obs);
-  const combined = [...av, ...bv], nA = av.length; let c = 0;
-  for (let i = 0; i < iters; i++) {
-    const s = shuffle(combined);
-    const diff = mean(s.slice(nA)) - mean(s.slice(0, nA));
-    if (Math.abs(diff) >= absObs) c++;
-  }
-  return c / iters;
-}
-function cohenD(a, b) {
-  const av = numSeries(a), bv = numSeries(b);
-  if (av.length < 2 || bv.length < 2) return undefined;
-  const ma = mean(av), mb = mean(bv);
-  const pooled = Math.sqrt(((av.length - 1) * sdSample(av) ** 2 + (bv.length - 1) * sdSample(bv) ** 2) / (av.length + bv.length - 2));
-  return pooled ? Math.abs(mb - ma) / pooled : undefined;
-}
-
-function pca2(features) {
-  const names = Object.keys(features), n = features[names[0]]?.length || 0;
-  if (!n || names.length < 2) return undefined;
-  const vectors = names.map(nm => {
-    const v = features[nm].map(statsToNum).map(x => x === undefined ? NaN : x);
-    const clean = v.filter(x => Number.isFinite(x));
-    const m = mean(clean), sd2 = sdSample(clean) || 1;
-    return v.map(x => (Number.isFinite(x) ? (x - m) / sd2 : 0));
-  });
-  const k = names.length;
-  const cov = Array.from({ length: k }, () => Array.from({ length: k }, () => 0));
-  for (let i = 0; i < k; i++) {
-    for (let j = i; j < k; j++) {
-      let s = 0, cnt = 0;
-      for (let t = 0; t < n; t++) {
-        const xi = vectors[i][t], xj = vectors[j][t];
-        if (Number.isFinite(xi) && Number.isFinite(xj)) { s += xi * xj; cnt++; }
-      }
-      const v = cnt ? s / (cnt - 1 || 1) : 0;
-      cov[i][j] = v; cov[j][i] = v;
-    }
-  }
-  let covR = cov.map(r => [...r]);
-  const comps = [], expl = [];
-  function powerIter(A) {
-    const d = A.length;
-    let v = Array.from({ length: d }, (_, i) => (i + 1) / d);
-    const n0 = Math.sqrt(v.reduce((a, x) => a + x * x, 0)) || 1;
-    v = v.map(x => x / n0);
-    for (let it = 0; it < 80; it++) {
-      const Av = A.map(r => r.reduce((a, vl, j) => a + vl * v[j], 0));
-      const nm = Math.sqrt(Av.reduce((a, x) => a + x * x, 0)) || 1;
-      const vN = Av.map(x => x / nm);
-      const diff = vN.reduce((a, x, i) => a + (x - v[i]) ** 2, 0);
-      v = vN;
-      if (diff < 1e-8) break;
-    }
-    const Av = A.map(r => r.reduce((a, vl, j) => a + vl * v[j], 0));
-    const eig = v.reduce((a, x, i) => a + x * Av[i], 0);
-    return { v, eig };
-  }
-  for (let c = 0; c < 2; c++) {
-    const res = powerIter(covR);
-    comps.push(res.v); expl.push(res.eig);
-    for (let i = 0; i < covR.length; i++) for (let j = 0; j < covR.length; j++) covR[i][j] -= res.eig * res.v[i] * res.v[j];
-  }
-  const tot = expl.reduce((a, b) => a + b, 0) || 1;
-  const loadings = comps[0].map((val, idx) => ({ name: names[idx], loading: val })).sort((a, b) => Math.abs(b.loading) - Math.abs(a.loading));
-  return { explainedRatios: expl.map(e => e / tot), loadings, pc1ExplainedPct: (expl[0] / tot) * 100 };
-}
-
-function getSeriesFor(ctx, testKey, metricKey) {
-  return ctx.allParsedData.map(d => statsToNum(d.tests?.[testKey]?.metrics?.[metricKey]));
-}
-
-function consistencyComment(sd, cv, n, metricName, dir, context = '') {
-  if (sd === undefined || n < 2) return '';
-  const threshold_cv_high = 25, threshold_cv_moderate = 12;
-  const isHighSD = cv !== undefined ? cv > threshold_cv_high : false;
-  const isModeratrSD = cv !== undefined ? cv > threshold_cv_moderate && cv <= threshold_cv_high : false;
-  const isLowSD = cv !== undefined ? cv <= threshold_cv_moderate : false;
-  if (isHighSD) return `High variability (CV=${cv.toFixed(1)}%) across ${n} ${context}. ${metricName} is inconsistent — interpret with caution.`;
-  if (isModeratrSD) return `Moderate variability (CV=${cv.toFixed(1)}%) across ${n} ${context}.`;
-  if (isLowSD) return `Low variability (CV=${cv.toFixed(1)}%) across ${n} ${context}. ${metricName} is numerically consistent across sessions.`;
-  return `SD=${sd.toFixed(3)} across ${n} ${context}.`;
-}
-
-function pValueComment(p, alpha = 0.05) {
-  if (p === undefined) return '';
-  if (p < 0.001) return `p<0.001 — strong evidence against H₀`;
-  if (p < alpha) return `p=${p.toFixed(3)} — statistically significant (α=${alpha})`;
-  if (p < 0.1) return `p=${p.toFixed(3)} — trend toward significance`;
-  return `p=${p.toFixed(3)} — not significant (fail to reject H₀)`;
-}
-
-function effectSizeComment(d) {
-  if (d === undefined) return '';
-  if (d < 0.2) return `negligible (d=${d.toFixed(2)})`;
-  if (d < 0.5) return `small (d=${d.toFixed(2)})`;
-  if (d < 0.8) return `medium (d=${d.toFixed(2)})`;
-  return `large (d=${d.toFixed(2)})`;
-}
-
-function rComment(r) {
-  if (r === undefined) return '';
-  const ar = Math.abs(r);
-  if (ar > 0.8) return `very strong (r=${r.toFixed(3)})`;
-  if (ar > 0.6) return `strong (r=${r.toFixed(3)})`;
-  if (ar > 0.4) return `moderate (r=${r.toFixed(3)})`;
-  if (ar > 0.2) return `weak (r=${r.toFixed(3)})`;
-  return `negligible (r=${r.toFixed(3)})`;
-}
-
-function trendComment(slope, r2, permP, metric, dir) {
-  if (slope === undefined || r2 === undefined) return 'Insufficient data for trend analysis.';
-  const isGoodDir = dir === 'high' ? slope > 0 : (dir === 'low' ? slope < 0 : null);
-  const sig = permP !== undefined && permP < 0.05;
-  const dirWord = slope > 0 ? 'increasing' : 'decreasing';
-  const arrow = slope > 0 ? '↑' : '↓';
-  const dirLabel = isGoodDir === true ? '(favorable direction)' : isGoodDir === false ? '(unfavorable direction)' : '';
-  const sigWord = sig ? 'significant' : 'non-significant';
-  return `${arrow} ${dirWord} trend ${dirLabel} — slope=${slope.toFixed(4)}, R²=${r2.toFixed(3)} (${sigWord}, perm-p=${permP !== undefined ? permP.toFixed(3) : 'N/A'}).${r2 > 0.7 ? ' Strong linear fit.' : r2 > 0.4 ? ' Moderate linear fit.' : ' Weak linear fit — interpret with caution.'}`;
-}
-
-function computeAllDiagnostics(ctx, directionMap) {
-  const tests = sortTestConditions(Array.from(ctx.allTestConditions));
-  const metrics = Array.from(ctx.allMetrics).sort();
-  const results = { descriptive: {}, inferential: {}, correlation: {}, regression: {}, multivariate: {}, longitudinal: {} };
-
-  tests.forEach(tk => {
-    results.descriptive[tk] = {};
-    metrics.forEach(m => {
-      const series = getSeriesFor(ctx, tk, m);
-      const nums = numSeries(series);
-      if (!nums.length) return;
-      const ds = descStats(nums);
-      const dir = directionMap[m];
-      const nObs = nums.length;
-      const comment = nObs >= 2 ? consistencyComment(ds.sd, ds.cv, nObs, m, dir, 'sessions') : `n=1: single observation. SD not applicable.`;
-      results.descriptive[tk][m] = { ...ds, comment };
-    });
-  });
-
-  tests.forEach(tk => {
-    results.inferential[tk] = {};
-    metrics.forEach(m => {
-      if (!ctx.allMetrics.has(m)) return;
-      const series = getSeriesFor(ctx, tk, m);
-      const nums = numSeries(series);
-      if (nums.length < 2) return;
-      const entry = {};
-      if (nums.length >= 4) {
-        const mid = Math.floor(nums.length / 2);
-        const d = cohenD(nums.slice(0, mid), nums.slice(mid));
-        if (d !== undefined) {
-          entry.cohenD = d;
-          entry.cohenDComment = `Effect size (early vs late sessions, split halves): ${effectSizeComment(d)}`;
-        }
-      } else if (nums.length === 2) {
-        const ch = nums[1] - nums[0];
-        entry.cohenDComment = `First vs last session change: ${ch > 0 ? '+' : ''}${ch.toFixed(3)} (two timepoints — descriptive only).`;
-      } else if (nums.length === 3) {
-        const deltas = [nums[1] - nums[0], nums[2] - nums[1]];
-        const dm = descStats(deltas);
-        if (dm) entry.cohenDComment = `Consecutive-session step deltas: mean=${dm.mean.toFixed(3)}, SD=${dm.sd !== undefined ? dm.sd.toFixed(3) : '—'}.`;
-      }
-      if (nums.length >= 4) {
-        const mid = Math.floor(nums.length / 2);
-        const early = nums.slice(0, mid), late = nums.slice(mid);
-        const pDiff = permPMeanDiff(early, late, 300);
-        const diff = mean(late) - mean(early);
-        const dir = directionMap[m];
-        const favorable = dir === 'high' ? diff > 0 : dir === 'low' ? diff < 0 : null;
-        entry.earlyLateDiff = diff;
-        entry.earlyLateP = pDiff;
-        entry.earlyLateFavorable = favorable;
-        entry.earlyLateComment = `Early mean=${mean(early).toFixed(3)} vs late mean=${mean(late).toFixed(3)}. Diff=${diff > 0 ? '+' : ''}${diff.toFixed(3)} (${pValueComment(pDiff)})${favorable === true ? ' — favorable' : favorable === false ? ' — unfavorable' : ''}.`;
-      }
-      const sdList = tests.map(t2 => {
-        const s = getSeriesFor(ctx, t2, m);
-        const d = descStats(s);
-        return d?.sd;
-      }).filter(v => v !== undefined);
-      const mySD = descStats(nums)?.sd;
-      if (mySD !== undefined && sdList.length > 1) {
-        const rank = sdList.filter(v => v <= mySD).length;
-        const consistencyPct = (rank / sdList.length) * 100;
-        entry.consistencyRank = rank;
-        entry.consistencyTotal = sdList.length;
-        entry.consistencyPct = consistencyPct;
-        entry.consistencyComment = `SD rank across sections: ${rank}/${sdList.length} (${consistencyPct.toFixed(0)}th pctile). ${consistencyPct > 75 ? 'Relatively high variability for this metric vs other sections.' : consistencyPct < 25 ? 'Relatively consistent vs other sections.' : 'Moderate consistency across sections.'}`;
-      }
-      if (Object.keys(entry).length) results.inferential[tk][m] = entry;
-    });
-  });
-
-  tests.forEach(tk => {
-    results.correlation[tk] = [];
-    const availMetrics = metrics.filter(m => ctx.allMetrics.has(m) && numSeries(getSeriesFor(ctx, tk, m)).length >= 3);
-    for (let i = 0; i < availMetrics.length; i++) {
-      for (let j = i + 1; j < availMetrics.length; j++) {
-        const m1 = availMetrics[i], m2 = availMetrics[j];
-        const pairs = [];
-        ctx.allParsedData.forEach(d => {
-          const v1 = statsToNum(d.tests?.[tk]?.metrics?.[m1]), v2 = statsToNum(d.tests?.[tk]?.metrics?.[m2]);
-          if (v1 !== undefined && v2 !== undefined) pairs.push([v1, v2]);
-        });
-        if (pairs.length < 3) continue;
-        const xs = pairs.map(p => p[0]), ys = pairs.map(p => p[1]);
-        const r = pearson(xs, ys), rho = spearman(xs, ys);
-        const pP = permPCorr(xs, ys, 300);
-        const sig = pP !== undefined && pP < 0.05;
-        results.correlation[tk].push({
-          m1, m2, r, rho, p: pP,
-          comment: `${m1} vs ${m2}: Pearson ${rComment(r)}, Spearman ρ=${rho !== undefined ? rho.toFixed(3) : 'N/A'}. ${pValueComment(pP)}. ${sig ? 'Significant association.' : 'No significant association at α=0.05.'}`
-        });
-      }
-    }
-  });
-
-  tests.forEach(tk => {
-    results.regression[tk] = [];
-    metrics.filter(m => ctx.allMetrics.has(m)).forEach(m => {
-      const series = getSeriesFor(ctx, tk, m);
-      const pairs = [];
-      series.forEach((v, idx) => { if (v !== undefined) pairs.push([idx, v]); });
-      if (pairs.length < 3) return;
-      const xs = pairs.map(p => p[0]), ys = pairs.map(p => p[1]);
-      const reg = linReg(xs, ys);
-      if (!reg) return;
-      const pSlope = permPSlope(xs, ys, 300);
-      const dir = directionMap[m];
-      const favorable = dir === 'high' ? reg.slope > 0 : dir === 'low' ? reg.slope < 0 : null;
-      results.regression[tk].push({
-        metric: m, slope: reg.slope, intercept: reg.intercept, r2: reg.r2, p: pSlope, favorable,
-        comment: `${m} ~ session: slope=${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(4)}, R²=${reg.r2.toFixed(3)}. ${pValueComment(pSlope)}${favorable === true ? ' Favorable direction.' : favorable === false ? ' Unfavorable direction.' : ''}.`
-      });
-    });
-  });
-
-  tests.forEach(tk => {
-    const feats = {};
-    metrics.filter(m => ctx.allMetrics.has(m)).forEach(m => {
-      feats[m] = getSeriesFor(ctx, tk, m).map(v => v !== undefined ? v : NaN);
-    });
-    if (Object.keys(feats).length < 3) { results.multivariate[tk] = null; return; }
-    const pc = pca2(feats);
-    if (!pc) { results.multivariate[tk] = null; return; }
-    const top3 = pc.loadings.slice(0, 3);
-    results.multivariate[tk] = {
-      pc1Pct: pc.pc1ExplainedPct,
-      top: top3,
-      comment: `PC1 captures ${pc.pc1ExplainedPct.toFixed(1)}% of variance. Dominant: ${top3.map(x => `${x.name} (${x.loading.toFixed(2)})`).join('; ')}.`
-    };
-  });
-
-  tests.forEach(tk => {
-    results.longitudinal[tk] = {};
-    metrics.filter(m => ctx.allMetrics.has(m)).forEach(m => {
-      const series = getSeriesFor(ctx, tk, m);
-      const pairs = [];
-      series.forEach((v, idx) => { if (v !== undefined) pairs.push([idx, v]); });
-      if (pairs.length < 3) return;
-      const xs = pairs.map(p => p[0]), ys = pairs.map(p => p[1]);
-      const reg = linReg(xs, ys), pS = permPSlope(xs, ys, 300);
-      const dir = directionMap[m];
-      const comment = trendComment(reg?.slope, reg?.r2, pS, m, dir);
-      let mono = true;
-      for (let i = 1; i < ys.length; i++) {
-        if ((reg?.slope > 0 && ys[i] < ys[i - 1]) || (reg?.slope < 0 && ys[i] > ys[i - 1])) { mono = false; break; }
-      }
-      results.longitudinal[tk][m] = { slope: reg?.slope, r2: reg?.r2, p: pS, monotonic: mono, comment };
-    });
-  });
-
-  return results;
-}
-
-function renderDiagnostics(diag, ctx) {
-  const tests = sortTestConditions(Object.keys(diag.descriptive));
-  function badge(text, cls) { return `<span class="stat-badge ${cls}">${escapeHtml(String(text))}</span>`; }
-  function verdict(sig) { return sig ? `<span class="verdict verdict-reject">REJECT H₀</span>` : `<span class="verdict verdict-fail">FAIL TO REJECT</span>`; }
-  function row(label, value, commentary = '') {
-    return `<div class="stat-row"><span class="stat-label">${escapeHtml(label)}</span><span class="stat-value">${value}</span>${commentary ? `<span class="stat-commentary">${commentary}</span>` : ''}</div>`;
-  }
-  function section(title, id, body, open = true) {
-    return `<div class="stat-section"><div class="stat-section-header acc-toggle ${open ? 'acc-open' : ''}" data-target="${id}">${escapeHtml(title)}<span class="acc-arrow">▼</span></div><div id="${id}" class="stat-section-body" style="${open ? '' : 'display:none'}">${body}</div></div>`;
-  }
-  let html = '';
-  const nSessions = ctx.allParsedData.length;
-  if (nSessions < 2) {
-    html += `<div style="margin-bottom:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--border2);background:rgba(167,139,250,0.08);font-size:11.5px;line-height:1.45;color:var(--text2);"><strong style="color:var(--text);">More reports needed.</strong> Upload <strong>2 or more</strong> pupilometry PDFs for session-wise descriptive stats, split-half effect size, and section consistency ranks. Upload <strong>3 or more</strong> for correlations, regression vs session order, PCA, and longitudinal trend tests.</div>`;
-  } else if (nSessions < 3) {
-    html += `<div style="margin-bottom:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--border2);background:rgba(167,139,250,0.06);font-size:11.5px;line-height:1.45;color:var(--text2);"><strong style="color:var(--text);">Optional:</strong> Upload <strong>3 or more</strong> sessions for correlation, regression, PCA, and full longitudinal commentary.</div>`;
-  }
-
-  if (activeStatTab === 'descriptive') {
-    html += '<div>';
-    tests.forEach((tk, ti) => {
-      const tdata = diag.descriptive[tk];
-      if (!tdata || !Object.keys(tdata).length) return;
-      let body = '';
-      Object.keys(tdata).forEach(m => {
-        const d = tdata[m];
-        if (!d) return;
-        const cvBadge = d.cv !== undefined ? (d.cv > 25 ? badge(`CV ${d.cv.toFixed(1)}%`, 'badge-bad') : d.cv > 12 ? badge(`CV ${d.cv.toFixed(1)}%`, 'badge-warn') : badge(`CV ${d.cv.toFixed(1)}%`, 'badge-good')) : '';
-        body += `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border2);"><div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:5px;display:flex;align-items:center;gap:6px;">${escapeHtml(m)} ${cvBadge}</div>`;
-        body += row('n', escapeHtml(String(d.n)));
-        body += row('mean ± SD', d.mean !== undefined ? `${d.mean.toFixed(3)} ± ${d.sd !== undefined ? d.sd.toFixed(3) : '—'}` : '-', escapeHtml(d.comment || ''));
-        body += row('median', d.median !== undefined ? d.median.toFixed(3) : '-');
-        body += row('range', d.min !== undefined ? `[${d.min.toFixed(3)}, ${d.max.toFixed(3)}]` : '-');
-        body += row('IQR', d.iqr !== undefined ? d.iqr.toFixed(3) : '-');
-        if (d.skew !== undefined) body += row('skewness', d.skew.toFixed(3), Math.abs(d.skew) > 1 ? 'Substantial skew' : Math.abs(d.skew) > 0.5 ? 'Mild skew' : 'Approximately symmetric');
-        body += '</div>';
-      });
-      html += section(`${tk} — Descriptive`, `desc-${ti}`, body, ti === 0);
-    });
-    html += '</div>';
-  } else if (activeStatTab === 'inferential') {
-    html += '<div>';
-    tests.forEach((tk, ti) => {
-      const tdata = diag.inferential[tk];
-      if (!tdata || !Object.keys(tdata).length) return;
-      let body = '';
-      Object.keys(tdata).forEach(m => {
-        const d = tdata[m];
-        body += `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border2);"><div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:5px;">${escapeHtml(m)}</div>`;
-        if (d.cohenDComment) body += row('Effect size', d.cohenD !== undefined ? d.cohenD.toFixed(3) : 'N/A', escapeHtml(d.cohenDComment));
-        if (d.earlyLateComment) {
-          const pSig = d.earlyLateP !== undefined && d.earlyLateP < 0.05;
-          body += row('Early vs Late', `${verdict(pSig)} ${d.earlyLateDiff !== undefined ? (d.earlyLateDiff > 0 ? '+' : '') + d.earlyLateDiff.toFixed(3) : ''}`, escapeHtml(d.earlyLateComment));
-        }
-        if (d.consistencyComment) body += row('Consistency rank', `${d.consistencyRank}/${d.consistencyTotal || '—'}`, escapeHtml(d.consistencyComment));
-        body += '</div>';
-      });
-      if (!body) body = '<p style="font-size:11px;color:var(--text3);">No inferential rows yet. Need numeric metrics across sessions.</p>';
-      html += section(`${tk} — Inferential`, `inf-${ti}`, body, ti === 0);
-    });
-    html += '</div>';
-  } else if (activeStatTab === 'correlation') {
-    html += '<div>';
-    tests.forEach((tk, ti) => {
-      const corrs = diag.correlation[tk];
-      if (!corrs || !corrs.length) {
-        html += section(`${tk} — Correlations`, `corr-${ti}`, '<p style="font-size:11px;color:var(--text3);">Needs <strong>3+</strong> sessions with paired numeric values for this section.</p>', ti === 0);
-        return;
-      }
-      let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;"><thead><tr>
-        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border2);">Pair</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">r</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">ρ</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">p(perm)</th>
-        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Note</th>
-      </tr></thead><tbody>`;
-      corrs.forEach(c => {
-        const sig = c.p !== undefined && c.p < 0.05;
-        const rCol = Math.abs(c.r) > 0.6 ? 'color:var(--green)' : Math.abs(c.r) > 0.3 ? 'color:var(--yellow)' : 'color:var(--text2)';
-        body += `<tr style="border-bottom:1px solid var(--border2);"><td style="padding:5px 8px;color:var(--text);">${escapeHtml(c.m1)}<br><span style="color:var(--text3);">vs ${escapeHtml(c.m2)}</span></td>
-          <td style="padding:5px 8px;text-align:center;${rCol}">${c.r !== undefined ? c.r.toFixed(3) : '—'}</td>
-          <td style="padding:5px 8px;text-align:center;color:var(--text2)">${c.rho !== undefined ? c.rho.toFixed(3) : '—'}</td>
-          <td style="padding:5px 8px;text-align:center;">${c.p !== undefined ? `<span style="color:${sig ? 'var(--red)' : 'var(--text3)'}">${c.p.toFixed(3)}</span>` : '-'}</td>
-          <td style="padding:5px 8px;color:var(--text2);font-size:10.5px;line-height:1.4;">${escapeHtml(c.comment)}</td></tr>`;
-      });
-      body += '</tbody></table>';
-      html += section(`${tk} — Correlations`, `corr-${ti}`, body, ti === 0);
-    });
-    html += '</div>';
-  } else if (activeStatTab === 'regression') {
-    html += '<div>';
-    tests.forEach((tk, ti) => {
-      const regs = diag.regression[tk];
-      if (!regs || !regs.length) {
-        html += section(`${tk} — Regression`, `reg-${ti}`, '<p style="font-size:11px;color:var(--text3);">Needs <strong>3+</strong> sessions for metric ~ session index.</p>', ti === 0);
-        return;
-      }
-      let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;"><thead><tr>
-        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Metric</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Slope</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">R²</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">p</th>
-        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Commentary</th>
-      </tr></thead><tbody>`;
-      regs.forEach(r => {
-        const sig = r.p !== undefined && r.p < 0.05;
-        body += `<tr style="border-bottom:1px solid var(--border2);"><td style="padding:5px 8px;color:var(--text);">${escapeHtml(r.metric)}</td>
-          <td style="padding:5px 8px;text-align:center;color:${r.slope > 0 ? 'var(--green)' : 'var(--red)'};">${r.slope !== undefined ? (r.slope > 0 ? '+' : '') + r.slope.toFixed(4) : '—'}</td>
-          <td style="padding:5px 8px;text-align:center;">${r.r2 !== undefined ? r.r2.toFixed(3) : '—'}</td>
-          <td style="padding:5px 8px;text-align:center;">${r.p !== undefined ? `<span style="color:${sig ? 'var(--red)' : 'var(--text3)'}">${r.p.toFixed(3)}</span>` : '-'}</td>
-          <td style="padding:5px 8px;color:var(--text2);font-size:10.5px;line-height:1.4;">${escapeHtml(r.comment)}</td></tr>`;
-      });
-      body += '</tbody></table>';
-      html += section(`${tk} — Regression (metric ~ session)`, `reg-${ti}`, body, ti === 0);
-    });
-    html += '</div>';
-  } else if (activeStatTab === 'multivariate') {
-    html += '<div>';
-    tests.forEach((tk, ti) => {
-      const pcd = diag.multivariate[tk];
-      if (!pcd) {
-        html += section(`${tk} — PCA`, `mv-${ti}`, '<p style="font-size:11px;color:var(--text3);">Needs ≥3 numeric metrics in this section and ≥2 sessions.</p>', ti === 0);
-        return;
-      }
-      let body = `<div style="margin-bottom:10px;">${row('PC1 variance', `${pcd.pc1Pct.toFixed(1)}%`, escapeHtml(pcd.comment))}</div>`;
-      body += `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;"><thead><tr>
-        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Metric</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">PC1 loading</th>
-      </tr></thead><tbody>`;
-      pcd.top.forEach(ld => {
-        body += `<tr style="border-bottom:1px solid var(--border2);"><td style="padding:5px 8px;color:var(--text);">${escapeHtml(ld.name)}</td><td style="padding:5px 8px;text-align:center;">${ld.loading.toFixed(3)}</td></tr>`;
-      });
-      body += '</tbody></table>';
-      html += section(`${tk} — PCA`, `mv-${ti}`, body, ti === 0);
-    });
-    html += '</div>';
-  } else if (activeStatTab === 'longitudinal') {
-    html += '<div>';
-    tests.forEach((tk, ti) => {
-      const ldata = diag.longitudinal[tk];
-      if (!ldata || !Object.keys(ldata).length) {
-        html += section(`${tk} — Longitudinal`, `lng-${ti}`, '<p style="font-size:11px;color:var(--text3);">Needs <strong>3+</strong> sessions per metric.</p>', ti === 0);
-        return;
-      }
-      let body = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;"><thead><tr>
-        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Metric</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Slope/sess</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">R²</th>
-        <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">p(perm)</th>
-        <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;border-bottom:1px solid var(--border2);">Commentary</th>
-      </tr></thead><tbody>`;
-      Object.keys(ldata).forEach(m => {
-        const d = ldata[m];
-        const sig = d.p !== undefined && d.p < 0.05;
-        body += `<tr style="border-bottom:1px solid var(--border2);"><td style="padding:5px 8px;color:var(--text);">${escapeHtml(m)}</td>
-          <td style="padding:5px 8px;text-align:center;">${d.slope !== undefined ? (d.slope > 0 ? '+' : '') + d.slope.toFixed(4) : '—'}</td>
-          <td style="padding:5px 8px;text-align:center;">${d.r2 !== undefined ? d.r2.toFixed(3) : '—'}</td>
-          <td style="padding:5px 8px;text-align:center;">${d.p !== undefined ? `<span style="color:${sig ? 'var(--red)' : 'var(--text3)'}">${d.p.toFixed(3)}</span>` : '-'}</td>
-          <td style="padding:5px 8px;color:var(--text2);font-size:10.5px;line-height:1.4;">${escapeHtml(d.comment)}</td></tr>`;
-      });
-      body += '</tbody></table>';
-      html += section(`${tk} — Longitudinal`, `lng-${ti}`, body, ti === 0);
-    });
-    html += '</div>';
-  }
-
-  statsContent.innerHTML = html;
-  statsContent.querySelectorAll('.acc-toggle').forEach(header => {
-    header.addEventListener('click', () => {
-      const target = document.getElementById(header.dataset.target);
-      if (!target) return;
-      const isOpen = target.style.display !== 'none';
-      target.style.display = isOpen ? 'none' : 'block';
-      header.classList.toggle('acc-open', !isOpen);
-    });
-  });
-}
-
-function buildPupilometryReportDump() {
-  const ctx = rebuildMetricSets();
-  let diag = null;
-  try { diag = computeAllDiagnostics(ctx, PUPILOMETRY_METRIC_DIRECTION); } catch (e2) { diag = null; }
-  const tests = sortTestConditions(Array.from(ctx.allTestConditions));
-  const metrics = Array.from(ctx.allMetrics).sort();
-  let dump = `PUPILOMETRY FULL REPORT\nSessions: ${ctx.allParsedData.map(d => d.label).join(' → ')}\n`;
-  dump += `Numeric metrics include paired fields as separate columns (e.g. "Amplitude (Right)" / "Amplitude (Left)").\n\n`;
-  tests.forEach(tk => {
-    dump += `=== ${tk} ===\n`;
-    if (diag?.multivariate?.[tk]?.comment) dump += `  [PCA] ${diag.multivariate[tk].comment}\n`;
-    metrics.forEach(m => {
-      const vals = ctx.allParsedData.map(d => d.tests[tk]?.metrics[m]);
-      if (!vals.some(v => v !== undefined)) return;
-      const nums = numSeries(vals);
-      const ds = descStats(nums);
-      dump += `  ${m}: ${ctx.allParsedData.map((d, i) => {
-        const v = vals[i];
-        return v !== undefined ? `${d.label}=${typeof v === 'number' ? v.toFixed(3) : v}` : null;
-      }).filter(Boolean).join(' | ')}`;
-      if (ds) dump += ` | mean=${ds.mean.toFixed(3)} SD=${ds.sd !== undefined ? ds.sd.toFixed(3) : 'N/A'} CV=${ds.cv !== undefined ? ds.cv.toFixed(1) + '%' : 'N/A'}`;
-      dump += '\n';
-    });
-    if (diag?.correlation?.[tk]?.length) {
-      dump += `  [Correlations]\n`;
-      diag.correlation[tk].forEach(c => { dump += `    ${c.comment}\n`; });
-    }
-    if (diag?.regression?.[tk]?.length) {
-      dump += `  [Regression]\n`;
-      diag.regression[tk].forEach(r => { dump += `    ${r.comment}\n`; });
-    }
-    if (diag?.longitudinal?.[tk] && Object.keys(diag.longitudinal[tk]).length) {
-      dump += `  [Longitudinal]\n`;
-      Object.keys(diag.longitudinal[tk]).forEach(m => { dump += `    ${diag.longitudinal[tk][m].comment}\n`; });
-    }
-    dump += '\n';
-  });
-  return dump;
-}
-
-async function callAI(systemPrompt, userMessage) {
-  let response;
-  try {
-    response = await fetch('/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        max_tokens: AI_REQUEST_DEFAULTS.maxTokens,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }]
-      })
-    });
-  } catch (ne) { throw new Error(`Network error: ${ne.message}`); }
-  if (!response.ok) {
-    const p = await response.json().catch(() => ({}));
-    throw new Error(p?.error?.message || `HTTP ${response.status}`);
-  }
-  const result = await response.json();
-  if (result.content?.[0]?.text) return result.content[0].text;
-  throw new Error('Unexpected response format.');
-}
-
-function resetInterpretButtons() {
-  interpretationButton.disabled = false;
-  fullReportBtn.disabled = false;
-  execSummaryBtn.disabled = false;
-  editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
-  document.getElementById('interpret-button-text').textContent = 'Interpret View';
-  document.getElementById('interpret-icon').classList.remove('hidden');
-  document.getElementById('interpret-loading').classList.add('hidden');
-}
-
-document.getElementById('stat-tabs').addEventListener('click', e => {
-  const tab = e.target.closest('.stat-tab');
-  if (!tab) return;
-  document.querySelectorAll('#stat-tabs .stat-tab').forEach(t => t.classList.remove('active'));
-  tab.classList.add('active');
-  activeStatTab = tab.dataset.tab;
-  const raw = statsContent.dataset.computed;
-  if (!raw) return;
-  try {
-    const { diag, sig } = JSON.parse(raw);
-    if (sig !== statsSessionsSig()) return;
-    const ctx = rebuildMetricSets();
-    renderDiagnostics(diag, ctx);
-  } catch (e2) { /* ignore */ }
-});
-
-function statsSessionsSig() {
-  return `${sessions.length}|${sessions.map(s => s.label).join('|')}`;
-}
-
-runStatsBtn.addEventListener('click', () => {
-  if (!sessions.length) {
-    statsContent.innerHTML = '<p style="color:var(--red);font-size:12px;">Load at least one report first.</p>';
-    return;
-  }
-  const icon = document.getElementById('stats-icon');
-  const spin = document.getElementById('stats-loading');
-  runStatsBtn.disabled = true;
-  icon.classList.add('hidden');
-  spin.classList.remove('hidden');
-  setTimeout(() => {
-    try {
-      const ctx = rebuildMetricSets();
-      const diag = computeAllDiagnostics(ctx, PUPILOMETRY_METRIC_DIRECTION);
-      statsContent.dataset.computed = JSON.stringify({ diag, sig: statsSessionsSig() });
-      renderDiagnostics(diag, ctx);
-    } catch (err) {
-      statsContent.innerHTML = `<p style="color:var(--red);font-size:12px;">Error: ${escapeHtml(err.message)}</p>`;
-      console.error(err);
-    } finally {
-      runStatsBtn.disabled = false;
-      icon.classList.remove('hidden');
-      spin.classList.add('hidden');
-    }
-  }, 30);
-});
-
-editInterpretationBtn.addEventListener('click', () => {
-  if (!lastInterpretationRaw.trim()) return;
-  interpretationEditMode = true;
-  editInterpretationBtn.classList.add('hidden');
-  saveEditBtn.classList.remove('hidden');
-  cancelEditBtn.classList.remove('hidden');
-  fullReportBtn.disabled = true;
-  interpretationButton.disabled = true;
-  execSummaryBtn.disabled = true;
-  interpretationOutput.innerHTML = `<textarea id="interpretation-editor" spellcheck="true" style="width:100%;min-height:220px;padding:12px;font-size:13px;font-family:inherit;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);resize:vertical;line-height:1.5;">${escapeHtml(lastInterpretationRaw)}</textarea>`;
-  document.getElementById('interpretation-editor')?.focus();
-});
-
-saveEditBtn.addEventListener('click', () => {
-  const ta = document.getElementById('interpretation-editor');
-  if (ta) setInterpretationMarkdown(ta.value);
-  leaveInterpretationEditView();
-  fullReportBtn.disabled = false;
-  interpretationButton.disabled = false;
-  execSummaryBtn.disabled = false;
-  editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
-});
-
-cancelEditBtn.addEventListener('click', () => {
-  leaveInterpretationEditView();
-  interpretationOutput.innerHTML = renderMd(lastInterpretationRaw);
-  fullReportBtn.disabled = false;
-  interpretationButton.disabled = false;
-  execSummaryBtn.disabled = false;
-  editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
-});
-
-fullReportBtn.addEventListener('click', async () => {
-  if (!sessions.length) return;
-  flushInterpretationEditBeforeGenerate();
-  fullReportBtn.disabled = true;
-  execSummaryBtn.disabled = true;
-  interpretationButton.disabled = true;
-  editInterpretationBtn.disabled = true;
-  document.getElementById('full-report-btn-text').textContent = 'Generating…';
-  document.getElementById('full-report-loading').classList.remove('hidden');
-  interpretationOutput.textContent = 'Generating comprehensive report…';
-  const dump = buildPupilometryReportDump();
-  const sys = `You are a clinical expert in pupil light reflex / pupilometry testing.
-Provide a comprehensive structured interpretation.
-Structure: Executive Summary → Section-by-section findings (Analysis, Detection, constriction/dilation, other) → Statistical highlights (CV, correlations, regression vs session order, longitudinal wording when present) → Clinical implications (non-diagnostic).
-Flag metrics with CV>25% or permutation p<0.05 when those appear in the data summary.
-Do not diagnose named diseases. Be professional and evidence-based.`;
-  try {
-    const text = await callAI(sys, `Interpret the following pupilometry export:\n\n${dump}`);
-    setInterpretationMarkdown(text);
-  } catch (e) {
-    interpretationOutput.textContent = `Error: ${e.message}`;
-    lastInterpretationRaw = '';
-    editInterpretationBtn.disabled = true;
-  } finally {
-    fullReportBtn.disabled = false;
-    execSummaryBtn.disabled = false;
-    interpretationButton.disabled = false;
-    editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
-    document.getElementById('full-report-btn-text').textContent = 'Full Report';
-    document.getElementById('full-report-loading').classList.add('hidden');
-    interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-});
-
-execSummaryBtn.addEventListener('click', async () => {
-  if (!sessions.length) return;
-  flushInterpretationEditBeforeGenerate();
-  execSummaryBtn.disabled = true;
-  fullReportBtn.disabled = true;
-  interpretationButton.disabled = true;
-  editInterpretationBtn.disabled = true;
-  document.getElementById('exec-summary-btn-text').textContent = 'Generating…';
-  document.getElementById('exec-summary-loading').classList.remove('hidden');
-  interpretationOutput.textContent = 'Generating executive summary…';
-  const dump = buildPupilometryReportDump();
-  const sys = `You are a medical communication specialist helping clinicians interpret pupilometry results.
-Write a concise executive summary in plain language. Do not address the patient directly. Do not diagnose.
-Use short titled sections: Overview, Main findings, Right vs left asymmetries (when data supports), Multi-session patterns (if multiple sessions), What to consider next (non-diagnostic).`;
-  try {
-    const text = await callAI(sys, `Executive summary from this pupilometry export:\n\n${dump}`);
-    setInterpretationMarkdown(text);
-  } catch (e) {
-    interpretationOutput.textContent = `Error: ${e.message}`;
-    lastInterpretationRaw = '';
-    editInterpretationBtn.disabled = true;
-  } finally {
-    execSummaryBtn.disabled = false;
-    fullReportBtn.disabled = false;
-    interpretationButton.disabled = false;
-    editInterpretationBtn.disabled = !lastInterpretationRaw.trim();
-    document.getElementById('exec-summary-btn-text').textContent = 'Executive Summary';
-    document.getElementById('exec-summary-loading').classList.add('hidden');
-    interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-});
-
-interpretationButton.addEventListener('click', async () => {
-  const s = sessions[currentSession];
-  if (!s) {
-    interpretationOutput.textContent = 'No data. Upload and process reports first.';
-    return;
-  }
-  flushInterpretationEditBeforeGenerate();
-  interpretationButton.disabled = true;
-  fullReportBtn.disabled = true;
-  execSummaryBtn.disabled = true;
-  editInterpretationBtn.disabled = true;
-  document.getElementById('interpret-button-text').textContent = 'Generating…';
-  document.getElementById('interpret-icon').classList.add('hidden');
-  document.getElementById('interpret-loading').classList.remove('hidden');
-  interpretationOutput.textContent = 'Analyzing…';
-  let query = `Active UI tab: ${currentTab}\nSession: ${s.label}\n\n`;
-  query += buildDump(s, currentTab);
-  if (sessions.length > 1) {
-    query += '\n\n[Other sessions — labels only]\n' + sessions.map((x, i) => `${i + 1}. ${x.label}`).join('\n');
-    const raw = statsContent.dataset.computed;
-    if (raw) {
-      try {
-        const { diag, sig } = JSON.parse(raw);
-        if (sig === statsSessionsSig() && diag) {
-          query += '\n\n[Precomputed diagnostics summary — use if helpful]\n';
-          const tests = sortTestConditions(Object.keys(diag.descriptive || {}));
-          tests.slice(0, 3).forEach(tk => {
-            const cor = diag.correlation?.[tk];
-            if (cor && cor[0]) query += `${tk} correlation example: ${cor[0].comment}\n`;
-          });
-        }
-      } catch (e3) { /* ignore */ }
-    }
-  }
-  const sys = `You are a clinical expert in pupilometry. Interpret the data for the active tab and session. Compare right vs left where applicable. Note asymmetries. Do not diagnose. Be concise with short headings.`;
-  try {
-    const text = await callAI(sys, query);
-    setInterpretationMarkdown(text);
-  } catch (e) {
-    interpretationOutput.textContent = `Error: ${e.message}`;
-    lastInterpretationRaw = '';
-    editInterpretationBtn.disabled = true;
-  } finally {
-    resetInterpretButtons();
-    interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-});
-
-function buildDump(s, tab) {
-  let lines = [`Session: ${s.label}\n`];
-  const sections = tab === 'overview'      ? ['Analysis'] :
-                   tab === 'detection'     ? ['Detection'] :
-                   tab === 'constriction'  ? ['Constrict Results'] :
-                   tab === 'dilation'      ? ['Dilation Results'] :
-                   tab === 'other'         ? ['Other Results'] :
-                   Object.keys(s.tests);
-  sections.forEach(sec => {
-    const d = s.tests[sec];
-    if (!d) return;
-    lines.push(`\n=== ${sec} ===`);
-    Object.entries(d)
-      .filter(([k]) => !/normative/i.test(k) && !isSupressed(k))
-      .forEach(([k, v]) => {
-        if (v && typeof v === 'object' && ('right' in v || 'left' in v)) {
-          lines.push(`${k}: R=${v.right !== undefined ? v.right : '—'}  L=${v.left !== undefined ? v.left : '—'}`);
-        } else {
-          lines.push(`${k}: ${v}`);
-        }
-      });
-  });
-  return lines.join('\n');
-}
-
-// ---- PDF Parsing ----
-async function parsePupilometryPDF(file) {
-  const ab = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
-  let fullText = '';
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
-    fullText += '\n' + await extractPageText(page);
-  }
-  return parseStructuredData(fullText, file.name);
-}
-
-async function extractPageText(page) {
-  const tc = await page.getTextContent();
-  const items = tc.items.filter(i => i.str && i.str.trim());
-  if (!items.length) return '';
-  const TH = 3;
-  const sorted = [...items].sort((a, b) => {
-    const yd = b.transform[5] - a.transform[5];
-    return Math.abs(yd) > TH ? yd : a.transform[4] - b.transform[4];
-  });
-  let res = '', lastY = null;
-  for (const item of sorted) {
-    const y = item.transform[5], s = item.str.trim();
-    if (!s) continue;
-    if (lastY !== null && Math.abs(y - lastY) > TH) res += '\n';
-    else if (res.length > 0 && !res.endsWith('\n') && !res.endsWith(' ')) res += ' ';
-    res += s; lastY = y;
-  }
-  return res;
-}
-
-function parseStructuredData(text, fileName) {
-  const tests = {
-    'Analysis': {},
-    'Detection': {},
-    'Constrict Results': {},
-    'Dilation Results': {},
-    'Other Results': {}
-  };
-
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-  const SECTION_PATTERNS = [
-    { key: 'Analysis',         re: /^analysis\b/i },
-    { key: 'Detection',        re: /^detection\b/i },
-    { key: 'Constrict Results',re: /^constrict(?:ion)?\s+results?\b/i },
-    { key: 'Dilation Results', re: /^(?:dilation|dialation|dilate)\s+results?\b/i },
-    { key: 'Other Results',    re: /^other\s+(?:results?|metrics)\b/i },
-  ];
-
-  const DETECT_FIELDS    = ['Alpha Omega', 'Anisocoria', 'Miosis', 'Mydriasis', 'Tonic Pupil'];
-  const CONSTRICT_FIELDS = ['Avg. Constriction Speed', 'Constriction Time', 'Max. Constriction Speed'];
-  const DILAT_FIELDS     = ['Avg. Dilation Speed', 'Release Amplitude', '75% Recover Time'];
-
-  let currentSection = null;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const sec = SECTION_PATTERNS.find(s => s.re.test(line));
-    if (sec) { currentSection = sec.key; continue; }
-    if (!currentSection) continue;
-
-    if (currentSection === 'Detection') {
-      DETECT_FIELDS.forEach(f => {
-        if (line.toLowerCase().includes(f.toLowerCase())) {
-          const rest = line.substring(line.toLowerCase().indexOf(f.toLowerCase()) + f.length).trim();
-          if (rest) tests['Detection'][f] = extractFirstToken(rest);
-          else if (i + 1 < lines.length) tests['Detection'][f] = extractFirstToken(lines[i + 1]);
-        }
-      });
-
-    } else if (currentSection === 'Constrict Results') {
-      parseEyeFieldIntoObj(line, lines, i, CONSTRICT_FIELDS, tests['Constrict Results']);
-
-    } else if (currentSection === 'Dilation Results') {
-      parseEyeFieldIntoObj(line, lines, i, DILAT_FIELDS, tests['Dilation Results']);
-
-    } else if (currentSection === 'Analysis') {
-      parseLineWithRLPairs(line, lines, i, tests['Analysis']);
-
-    } else if (currentSection === 'Other Results') {
-      parseLineWithRLPairs(line, lines, i, tests['Other Results']);
-    }
-  }
-
-  // Fallback if nothing parsed
-  if (!Object.values(tests).some(t => Object.keys(t).length > 0)) {
-    fallbackParse(text, tests, DETECT_FIELDS, CONSTRICT_FIELDS, DILAT_FIELDS);
-  }
-
-  ['Analysis', 'Other Results'].forEach(sec => coerceTabularEyeStrings(tests[sec]));
-
-  Object.keys(tests).forEach(k => {
-    if (!Object.keys(tests[k]).length) delete tests[k];
-  });
-
-  const label = fileName.replace(/\.pdf$/i, '');
-  return { fileName, label, tests };
-}
-
-/** Strip leading bullets / markers from PDF text lines */
-function stripLeadingMarkers(s) {
-  return String(s || '').replace(/^[·•\-\*\u2022●\s]+/u, '').trim();
-}
-
-/** Remove trailing "| FLAG" style markers */
-function stripFlagSuffix(s) {
-  return String(s || '').replace(/\s*\|\s*FLAG\b/gi, '').trim();
-}
-
-/**
- * Primary numeric measurement on a line: prefer the segment after the LAST ':' so
- * normative ranges like "(0.703 - 1.944 mm)" before the colon are not mistaken for R/L values.
- */
-function extractPrimaryMeasurement(tail) {
-  if (!tail) return null;
-  const t = stripFlagSuffix(tail);
-  const colonIdx = t.lastIndexOf(':');
-  const segment = colonIdx >= 0 ? t.slice(colonIdx + 1) : t;
-  const nums = extractNumbers(segment);
-  if (!nums.length) return null;
-  return nums[nums.length - 1];
-}
-
-/** Base field name before normative "(...)" or trailing ":"; strip trailing "Right/Left Eye" if present */
-function fieldBaseBeforeParenOrColon(s) {
-  const t = stripFlagSuffix(s).trim();
-  const paren = t.indexOf('(');
-  const colon = t.indexOf(':');
-  let base = t;
-  if (paren >= 0 && (colon < 0 || paren < colon)) base = t.slice(0, paren).trim();
-  else if (colon >= 0) base = t.slice(0, colon).trim();
-  return base.replace(/\s+(right|left)\s+eye\s*$/i, '').trim();
-}
-
-function mergeRlTarget(target, baseKey, side, value) {
-  if (!baseKey || isSupressed(baseKey)) return;
-  if (value == null || !Number.isFinite(value)) return;
-  if (!target[baseKey] || typeof target[baseKey] !== 'object') target[baseKey] = {};
-  if (side === 'right') target[baseKey].right = value;
-  else target[baseKey].left = value;
-}
-
-/**
- * PDF table rows often extract as one line: "Amplitude 0.766 mm 0.63 mm 0.703 - 1.944"
- * (right value, left value, then normative range — no "Right Eye" wording).
- * Tabs may appear inside the normative dash (e.g. "0.703 -\t1.944").
- */
-function tryParseBareTwoValueMetricRow(ln, target) {
-  const s = String(ln || '').replace(/\t/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!s || /\bright\s+eye|\bleft\s+eye\b/i.test(s)) return false;
-  // Drop trailing normative range (two numbers separated by dash/en-dash)
-  const stripped = s.replace(/\s+\d+\.?\d*\s*[-–]\s*\d+\.?\d*\s*(?:mm|sec|mm\/sec|%)?\s*$/i, '').trim();
-  if (stripped === s) return false;
-  const m = stripped.match(/^(.+?)\s+(N\/A|-?\d+\.?\d*)\s*(mm|sec|mm\/sec|%)?\s+(N\/A|-?\d+\.?\d*)\s*(mm|sec|mm\/sec|%)?$/i);
-  if (!m) return false;
-  const name = m[1].trim();
-  if (!name || /:/.test(name) || isSupressed(name)) return false;
-  const rStr = String(m[2]).toUpperCase() === 'N/A' ? null : m[2];
-  const lStr = String(m[4]).toUpperCase() === 'N/A' ? null : m[4];
-  const r = rStr != null ? parseFloat(rStr) : NaN;
-  const l = lStr != null ? parseFloat(lStr) : NaN;
-  if (!Number.isFinite(r) && !Number.isFinite(l)) return false;
-  if (!target[name] || typeof target[name] !== 'object') target[name] = {};
-  if (Number.isFinite(r)) target[name].right = r;
-  if (Number.isFinite(l)) target[name].left = l;
-  return true;
-}
-
-/** Fix values accidentally stored as one concatenated string (post-parse cleanup). */
-function coerceTabularEyeStrings(sectionObj) {
-  if (!sectionObj || typeof sectionObj !== 'object') return;
-  Object.keys(sectionObj).forEach(key => {
-    const v = sectionObj[key];
-    if (typeof v !== 'string') return;
-    const s = v.replace(/\t/g, ' ').replace(/\s+/g, ' ').trim();
-    const stripped = s.replace(/\s+\d+\.?\d*\s*[-–]\s*\d+\.?\d*\s*(?:mm|sec|mm\/sec|%)?\s*$/i, '').trim();
-    if (stripped === s) return;
-    const m = stripped.match(/^(N\/A|-?\d+\.?\d*)\s*(mm|sec|mm\/sec|%)?\s+(N\/A|-?\d+\.?\d*)\s*(mm|sec|mm\/sec|%)?$/i);
-    if (!m) return;
-    const rStr = String(m[1]).toUpperCase() === 'N/A' ? null : m[1];
-    const lStr = String(m[3]).toUpperCase() === 'N/A' ? null : m[3];
-    const r = rStr != null ? parseFloat(rStr) : NaN;
-    const l = lStr != null ? parseFloat(lStr) : NaN;
-    if (!Number.isFinite(r) && !Number.isFinite(l)) return;
-    const o = {};
-    if (Number.isFinite(r)) o.right = r;
-    if (Number.isFinite(l)) o.left = l;
-    sectionObj[key] = o;
-  });
-}
-
-/**
- * "Amplitude Right Eye (0.703 - 1.944 mm): 0.766 mm" / "Left Eye ..." (same line).
- * Must run before generic two-number parsing so normative ranges are not used as R/L.
- */
-function tryParseMetricSuffixEyeLine(line, target) {
-  const cleaned = stripLeadingMarkers(stripFlagSuffix(line));
-
-  let m = cleaned.match(/^(.+?)\s+Right\s+Eye(?:\s*\([^)]*\))?\s*:?\s*(.+)$/i);
-  if (m) {
-    const base = fieldBaseBeforeParenOrColon(m[1]);
-    const val = extractPrimaryMeasurement(m[2]);
-    if (val != null) {
-      mergeRlTarget(target, base, 'right', val);
-      return true;
-    }
-    return false;
-  }
-  m = cleaned.match(/^(.+?)\s+Left\s+Eye(?:\s*\([^)]*\))?\s*:?\s*(.+)$/i);
-  if (m) {
-    const base = fieldBaseBeforeParenOrColon(m[1]);
-    const val = extractPrimaryMeasurement(m[2]);
-    if (val != null) {
-      mergeRlTarget(target, base, 'left', val);
-      return true;
-    }
-    return false;
-  }
-
-  m = cleaned.match(/^Right\s+Eye\s+(.+)$/i);
-  if (m) {
-    const tail = m[1].trim();
-    const base = fieldBaseBeforeParenOrColon(tail);
-    const val = extractPrimaryMeasurement(tail);
-    if (val != null) {
-      mergeRlTarget(target, base, 'right', val);
-      return true;
-    }
-    return false;
-  }
-  m = cleaned.match(/^Left\s+Eye\s+(.+)$/i);
-  if (m) {
-    const tail = m[1].trim();
-    const base = fieldBaseBeforeParenOrColon(tail);
-    const val = extractPrimaryMeasurement(tail);
-    if (val != null) {
-      mergeRlTarget(target, base, 'left', val);
-      return true;
-    }
-    return false;
-  }
-  return false;
-}
-
-/**
- * Parse a line from Analysis or Other Results sections.
- * Handles:
- *   - "FieldName R: 4.6 L: 4.2"  (all on one line)
- *   - "FieldName 4.6 4.2"         (two bare numbers = right then left)
- *   - "Right Eye FieldName 4.6"   (explicit eye label on same line)
- *   - "Left Eye FieldName 4.6"
- *   - "Amplitude Right Eye (range): 0.766 mm" / "… Left Eye …"  (clinical pupilometry layout)
- *   - "FieldName 4.6" followed by a next line with only a number (= left)
- *   - Plain "FieldName: value"
- * Stores paired values as { right, left }; plain scalars as strings.
- * Skips suppressed fields.
- */
-function parseLineWithRLPairs(line, lines, i, target) {
-  const raw = line.trim();
-  if (isSupressed(raw)) return;
-
-  // Clinical layout: metric name + Right/Left Eye + normative in parens + measured value after ':'
-  if (/\b(right|left)\s+eye\b/i.test(raw)) {
-    if (tryParseMetricSuffixEyeLine(raw, target)) return;
-  }
-
-  const ln = stripLeadingMarkers(raw);
-
-  // Tabular row: "Metric 0.766 mm 0.63 mm 0.703 - 1.944" (R, L, then normative — strip tail)
-  if (tryParseBareTwoValueMetricRow(ln, target)) return;
-
-  // Pattern A: FieldName R: val L: val  (or R val L val) on one line
-  const rlInline = ln.match(/^(.+?)\s+R[:\s]\s*(-?[\d.]+)\s+L[:\s]\s*(-?[\d.]+)/i);
-  if (rlInline) {
-    const k = rlInline[1].trim();
-    if (isSupressed(k)) return;
-    target[k] = { right: parseFloat(rlInline[2]), left: parseFloat(rlInline[3]) };
-    return;
-  }
-
-  // Pattern B: "Right Eye" / "Left Eye" (or Right/Left) prefix — remainder may include "(range): value"
-  const rightPrefix = ln.match(/^(?:right\s+eye|right)\s+(.+)$/i);
-  if (rightPrefix) {
-    const tail = stripFlagSuffix(rightPrefix[1]).trim();
-    const val = extractPrimaryMeasurement(tail);
-    const k = fieldBaseBeforeParenOrColon(tail);
-    if (!isSupressed(k) && val != null) {
-      if (!target[k] || typeof target[k] !== 'object') target[k] = {};
-      target[k].right = val;
-    }
-    return;
-  }
-  const leftPrefix = ln.match(/^(?:left\s+eye|left)\s+(.+)$/i);
-  if (leftPrefix) {
-    const tail = stripFlagSuffix(leftPrefix[1]).trim();
-    const val = extractPrimaryMeasurement(tail);
-    const k = fieldBaseBeforeParenOrColon(tail);
-    if (!isSupressed(k) && val != null) {
-      if (!target[k] || typeof target[k] !== 'object') target[k] = {};
-      target[k].left = val;
-    }
-    return;
-  }
-
-  // Pattern C: "FieldName val1 val2" — two numbers, treat as right then left (not when line is eye-suffixed)
-  const twoNums = ln.match(/^(.+?)\s+(-?[\d.]+)\s+(-?[\d.]+)\s*$/);
-  if (twoNums) {
-    const k = twoNums[1].trim();
-    if (!isSupressed(k) && !/\b(right|left)\s+eye\b/i.test(k)) {
-      target[k] = { right: parseFloat(twoNums[2]), left: parseFloat(twoNums[3]) };
-      return;
-    }
-  }
-
-  // Pattern D: plain "FieldName: value" or "FieldName value"
-  const plain = ln.match(/^(.+?)[\s:]+(-?[\d.,%-]+(?:\s+[A-Za-z/%]+)?)$/);
-  if (plain) {
-    const k = plain[1].trim(), rawVal = plain[2].trim();
-    if (isSupressed(k)) return;
-
-    // Value itself might encode R/L
-    const subRL = rawVal.match(/R[:\s]\s*(-?[\d.]+)\s+L[:\s]\s*(-?[\d.]+)/i);
-    if (subRL) {
-      target[k] = { right: parseFloat(subRL[1]), left: parseFloat(subRL[2]) };
-      return;
-    }
-
-    // Single number — check if next non-empty line is also a bare number (= left)
-    const singleNum = rawVal.match(/^-?[\d.]+$/);
-    if (singleNum && lines && i !== undefined) {
-      const nextLine = (lines[i + 1] || '').trim();
-      const nextBare = nextLine.match(/^(-?[\d.]+)\s*$/);
-      if (nextBare) {
-        target[k] = { right: parseFloat(rawVal), left: parseFloat(nextBare[1]) };
-        return;
-      }
-    }
-
-    if (!(target[k] && typeof target[k] === 'object' && ('right' in target[k] || 'left' in target[k]))) {
-      target[k] = rawVal;
-    }
-    return;
-  }
-
-  // Pattern E: bare field name that might carry an eye label on this line
-  // e.g. a line that is just "Right Eye" followed by subsequent content handled above
-}
-
-/**
- * Parse eye-specific fields into { right, left } pair objects (not duplicate flat keys).
- * Handles: same-line "fieldName 1.2 3.4", explicit "Right ... val" / "Left ... val" lines,
- * and "fieldName R: 1.2 L: 3.4" patterns.
- */
-function parseEyeFieldIntoObj(line, lines, i, fieldNames, target) {
-  const clean = stripLeadingMarkers(line);
-  const ll = clean.toLowerCase();
-
-  fieldNames.forEach(f => {
-    const fl = f.toLowerCase();
-    if (!ll.includes(fl)) return;
-
-    // R:/L: inline pattern on one line
-    const rlPat = clean.match(new RegExp(escRe(f) + '[^\\d]*R[:\\s]\\s*(-?[\\d.]+)[^\\d]+L[:\\s]\\s*(-?[\\d.]+)', 'i'));
-    if (rlPat) {
-      target[f] = { right: parseFloat(rlPat[1]), left: parseFloat(rlPat[2]) };
-      return;
-    }
-
-    // "Avg. Constriction Speed Right Eye (0.361 - 1.216 mm/sec): 0.682 mm/sec" (may have leading bullets)
-    const mRE = clean.match(new RegExp(escRe(f) + '\\s+Right\\s+Eye(?:\\s*\\([^)]*\\))?\\s*:?\\s*(.+)$', 'i'));
-    const mLE = clean.match(new RegExp(escRe(f) + '\\s+Left\\s+Eye(?:\\s*\\([^)]*\\))?\\s*:?\\s*(.+)$', 'i'));
-    if (mRE || mLE) {
-      if (!target[f] || typeof target[f] !== 'object') target[f] = {};
-      if (mRE) {
-        const v = extractPrimaryMeasurement(mRE[1]);
-        if (v != null) target[f].right = v;
-      }
-      if (mLE) {
-        const v = extractPrimaryMeasurement(mLE[1]);
-        if (v != null) target[f].left = v;
-      }
-      return;
-    }
-
-    const rest = clean.substring(ll.indexOf(fl) + f.length).trim();
-
-    // Single-eye remainder: normative "(lo - hi)" then ": measured"
-    if (rest.includes(':') && /\b(right|left)\s+eye\b/i.test(rest)) {
-      const v = extractPrimaryMeasurement(rest);
-      if (v != null) {
-        if (!target[f] || typeof target[f] !== 'object') target[f] = {};
-        if (/\bright\s+eye\b/i.test(rest)) target[f].right = v;
-        else if (/\bleft\s+eye\b/i.test(rest)) target[f].left = v;
-      }
-      return;
-    }
-
-    const nums = extractNumbers(rest);
-
-    if (nums.length >= 2) {
-      if (rest.includes(':') && /\b(right|left)\s+eye\b/i.test(rest)) {
-        const v = extractPrimaryMeasurement(rest);
-        if (v != null) {
-          if (!target[f] || typeof target[f] !== 'object') target[f] = {};
-          if (/\bright\s+eye\b/i.test(rest)) target[f].right = v;
-          else if (/\bleft\s+eye\b/i.test(rest)) target[f].left = v;
-        }
-        return;
-      }
-      target[f] = { right: nums[0], left: nums[1] };
-      return;
-    }
-    if (nums.length === 1) {
-      const isRight = /\bright\b/i.test(clean);
-      const isLeft = /\bleft\b/i.test(clean);
-      if (!target[f] || typeof target[f] !== 'object') target[f] = {};
-      if (isRight) target[f].right = nums[0];
-      else if (isLeft) target[f].left = nums[0];
-      else {
-        target[f].right = nums[0];
-        const nextNums = extractNumbers(stripLeadingMarkers(lines[i + 1] || ''));
-        if (nextNums.length) target[f].left = nextNums[0];
-      }
-    }
-  });
-}
-
-function fallbackParse(text, tests, detectFields, constrictFields, dilatFields) {
-  detectFields.forEach(f => {
-    const re = new RegExp(escRe(f) + '\\s*[:\\s]+([^\\n]+)', 'i');
-    const m = text.match(re);
-    if (m) tests['Detection'][f] = extractFirstToken(m[1]);
-  });
-  constrictFields.forEach(f => {
-    // Try R:/L: pattern first
-    const rl = text.match(new RegExp(escRe(f) + '[^\\d]*R[:\\s]\\s*(-?[\\d.]+)[^\\d]+L[:\\s]\\s*(-?[\\d.]+)', 'i'));
-    if (rl) { tests['Constrict Results'][f] = { right: parseFloat(rl[1]), left: parseFloat(rl[2]) }; return; }
-    const re = new RegExp(escRe(f) + '[^\\d]*(-?[\\d.]+)[^\\d]+(-?[\\d.]+)', 'i');
-    const m = text.match(re);
-    if (m) tests['Constrict Results'][f] = { right: parseFloat(m[1]), left: parseFloat(m[2]) };
-  });
-  dilatFields.forEach(f => {
-    const rl = text.match(new RegExp(escRe(f) + '[^\\d]*R[:\\s]\\s*(-?[\\d.]+)[^\\d]+L[:\\s]\\s*(-?[\\d.]+)', 'i'));
-    if (rl) { tests['Dilation Results'][f] = { right: parseFloat(rl[1]), left: parseFloat(rl[2]) }; return; }
-    const re = new RegExp(escRe(f) + '[^\\d]*(-?[\\d.]+)[^\\d]+(-?[\\d.]+)', 'i');
-    const m = text.match(re);
-    if (m) tests['Dilation Results'][f] = { right: parseFloat(m[1]), left: parseFloat(m[2]) };
-  });
-}
-
-function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-function extractFirstToken(s) { return s.trim().split(/\s+/)[0]; }
-function extractNumbers(s) {
-  const nums = [];
-  const matches = s.matchAll(/-?\d+\.?\d*/g);
-  for (const m of matches) nums.push(parseFloat(m[0]));
-  return nums;
-}
-
-function toNum(v) {
-  if (v === undefined || v === null) return null;
-  const n = parseFloat(String(v).replace(/,/g, ''));
-  return isNaN(n) ? null : n;
-}
-
-function formatVal(v) {
-  if (v === undefined || v === null) return '—';
-  if (v && typeof v === 'object' && ('right' in v || 'left' in v)) {
-    const r = v.right !== undefined ? (Number.isFinite(v.right) ? (v.right % 1 === 0 ? v.right : v.right.toFixed(3)) : v.right) : '—';
-    const l = v.left  !== undefined ? (Number.isFinite(v.left)  ? (v.left  % 1 === 0 ? v.left  : v.left.toFixed(3))  : v.left)  : '—';
-    return `R: ${r} / L: ${l}`;
-  }
-  const n = toNum(v);
-  if (n !== null) return n % 1 === 0 ? n.toString() : n.toFixed(3);
-  return String(v);
-}
-
-// Initial state
-showPlaceholder();
-</script>
+        function trendText(vals) { if (vals.length < 2) return 'Insufficient data'; const d = vals.at(-1) - vals[0]; if (Math.abs(d) < 3) return 'Stable / minimal net change'; return d > 0 ? 'Improving percentile trend' : 'Declining percentile trend'; }
+        function statRows(ds) { if (!ds) return [['N', '0', 'No data']]; return [['N', ds.n, 'Number of selected sessions with values.'], ['Mean', nfmt(ds.mean), 'Average value.'], ['Median', nfmt(ds.median), 'Middle value.'], ['SD', nfmt(ds.sd), 'Session-to-session variability.'], ['Min / Max', `${nfmt(ds.min)} / ${nfmt(ds.max)}`, 'Observed range.'], ['IQR', nfmt(ds.iqr), 'Middle 50% spread.'], ['CV', `${nfmt(ds.cv)}%`, 'Relative variability.']]; }
+        function statSection(title, rows) { return `<div class="stat-section"><div class="stat-section-header">${esc(title)}</div><div class="stat-section-body">${rows.map(r => `<div class="stat-row"><div class="stat-label">${esc(r[0])}</div><div class="stat-value">${esc(r[1])}</div><div class="stat-commentary">${esc(r[2])}</div></div>`).join('')}</div></div>`; }
+        function exportCsv() { const table = summaryTableContainer.querySelector('table'); if (!table) return; const csv = [...table.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`).join(',')).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cnsvs-selected-values.csv'; a.click(); URL.revokeObjectURL(a.href); }
+        function buildReportDump() { const table = groupedTableContainer.querySelector('table'); const grouped = table ? [...table.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')).join('\n') : ''; const selected = summaryTableContainer.querySelector('table') ? [...summaryTableContainer.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')).join('\n') : ''; return `[Selected Field]\n${selected}\n\n[Complete Grouped CNSVS Data]\n${grouped}`; }
+        async function callAI(systemPrompt, userMessage) { let response; try { response = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_tokens: AI_REQUEST_DEFAULTS.maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }) }); } catch (ne) { throw new Error(`Network error: ${ne.message}`); } if (!response.ok) { const p = await response.json().catch(() => ({})); throw new Error(p?.error?.message || `HTTP ${response.status}`); } const result = await response.json(); if (result.content?.[0]?.text) return result.content[0].text; throw new Error('Unexpected response format.'); }
+        function setButtonsLoading(which, on) { const map = { full: [fullReportBtn, 'full-report-btn-text', 'Full Report'], interpret: [interpretationButton, 'interpret-button-text', 'Interpret View'], exec: [execSummaryBtn, 'exec-summary-btn-text', 'Executive Summary'] }; Object.values(map).forEach(([btn]) => btn.disabled = on); editInterpretationBtn.disabled = on || !lastInterpretationRaw.trim(); if (map[which]) $(map[which][1]).textContent = on ? 'Generating…' : map[which][2]; if (!on) { Object.values(map).forEach(([btn, id, txt]) => $(id).textContent = txt); } }
+        async function generateFullReport() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('full', true); interpretationOutput.textContent = 'Generating comprehensive report…'; const sys = 'You are a clinical expert in neurocognitive CNS Vital Signs interpretation. Provide a comprehensive structured interpretation. Structure: Executive Summary → Cognitive Domain Scores → Specific Test Scores → Four Part Continuous Performance Test → Statistical Highlights → Clinical Considerations. Be evidence-based and non-diagnostic. Flag percentile <30.'; try { const text = await callAI(sys, `Create a full CNSVS report from this grouped data:\n\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('full', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
+        async function generateInterpretView() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('interpret', true); interpretationOutput.textContent = 'Analyzing selected view…'; const sys = 'You are a clinical expert in CNS Vital Signs interpretation. Interpret only the selected CNSVS field across selected sessions. Comment on trend, flagged values, and clinical meaning. Be concise and non-diagnostic.'; try { const text = await callAI(sys, `Current selected CNSVS view:\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('interpret', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
+        async function generateExecutiveSummary() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('exec', true); interpretationOutput.textContent = 'Generating executive summary…'; const sys = 'You are a clinical expert in CNS Vital Signs interpretation. Create a crisp executive summary with short titled sections: Overview, Main Findings, Flagged Areas, Longitudinal Pattern, What to Consider Next. Be non-diagnostic.'; try { const text = await callAI(sys, `Create executive summary from CNSVS grouped data:\n\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('exec', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
+    </script>
 </body>
+
 </html>

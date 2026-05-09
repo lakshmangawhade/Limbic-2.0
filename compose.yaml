@@ -1,24 +1,24 @@
 services:
-  # Python pupilometry parser — Node proxies /api/pupilometry/parse here
-  pupilometry-backend:
+  # Python CNSVS backend API (FastAPI)
+  cnsvs-backend:
     build:
       context: ./backend
-    image: pupilometry-backend
-    expose:
-      - "8000"
+    image: cnsvs-backend
+    ports:
+      - "8000:8000"
     restart: unless-stopped
 
-  posturography-analyzer:
+  cnsvs-analyzer:
     build:
       context: .
-    image: pupilometry-analyzer
+    image: cnsvs-analyzer
     ports:
       - "3000:3000"
     env_file:
       - .env
     environment:
-      # Inside Docker, 127.0.0.1 is this container — use the backend service name
-      PUPILOMETRY_PARSE_URL: http://pupilometry-backend:8000/parse-pupilometry
+      # Serve the CNSVS UI by default
+      APP_ENTRY: index.html
     depends_on:
-      - pupilometry-backend
+      - cnsvs-backend
     restart: unless-stopped
