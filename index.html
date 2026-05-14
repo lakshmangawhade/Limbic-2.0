@@ -526,25 +526,20 @@
                 <div id="controls-section" class="panel hidden">
                     <div class="panel-header">Analysis Controls</div>
                     <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
+                        <div><label>Visualization mode</label><select id="analysis-mode-select">
+                                <option value="trend">Trend by session (line / bar)</option>
+                                <option value="radar">Radar chart (test profile)</option>
+                            </select></div>
                         <div><label>Test Name</label><select id="group-select"></select></div>
                         <div><label>Field / Section</label><select id="section-select"></select></div>
-                        <div><label>Field Value / Metric</label><select id="metric-select"></select></div>
-                    </div>
-                </div>
-
-                <div id="session-section" class="panel hidden">
-                    <div class="panel-header" style="justify-content:space-between;"><span>Graph Files</span><span
-                            class="stat-badge badge-info">select + reorder</span></div>
-                    <div id="session-list"
-                        style="padding:12px;display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;">
-                    </div>
-                </div>
-
-                <div id="flagged-sidebar" class="panel hidden">
-                    <div class="panel-header" style="justify-content:space-between;"><span>Flagged</span><span
-                            class="stat-badge badge-bad">Percentile &lt; 30</span></div>
-                    <div id="flagged-list"
-                        style="padding:12px;max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                        <div id="metric-select-row"><label>Field Value / Metric</label><select
+                                id="metric-select"></select></div>
+                        <div id="radar-controls" class="hidden">
+                            <label>Profile metrics (axes)</label>
+                            <div id="radar-metric-selector"
+                                style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -588,10 +583,14 @@
                                     style="font-size:11px;padding:4px 10px;">Line</button></div>
                             <div id="chart-container" style="position:relative;height:360px;"><canvas
                                     id="results-chart"></canvas></div>
-                            <p
+                            <p id="session-chart-hint"
                                 style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">
-                                Graph uses only selected files in the order shown under Graph Files. Dataset 1 =
-                                percentile. Dataset 2 = standard score.</p>
+                                Graph uses processed files in the same order as the upload list (after Process).
+                                Dataset 1 = percentile. Dataset 2 = standard score.</p>
+                            <p id="radar-disclaimer" class="hidden"
+                                style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">
+                                Standard scores normalized 0–100 per axis using the max |SS| across selected sessions.
+                                Tooltips show original standard scores.</p>
                         </div>
                     </div>
 
@@ -599,12 +598,6 @@
                         <div class="panel-header">Selected Field Values</div>
                         <div id="summary-table-container"
                             style="padding:16px;overflow-x:auto;max-height:420px;overflow-y:auto;"></div>
-                    </div>
-
-                    <div class="panel">
-                        <div class="panel-header">Complete Grouped Data</div>
-                        <div id="grouped-table-container"
-                            style="padding:16px;overflow-x:auto;max-height:560px;overflow-y:auto;"></div>
                     </div>
 
                     <div class="panel" id="stats-panel">
@@ -678,10 +671,15 @@
             { bg: 'rgba(188,140,255,.25)', border: 'rgba(188,140,255,1)', solid: '#bc8cff' }
         ];
 
+        /** Optional overrides: metric name → 'high' (higher SS better) or 'low' (lower SS better). */
+        const RADAR_METRIC_DIRECTION = {};
+
         let uploadedSessions = [];
         let allSessions = [];
         let resultsChart = null;
         let chartStyle = 'bar';
+        let analysisMode = 'trend';
+        let radarMetricChangeBound = false;
         let activeStatTab = 'descriptive';
         let lastInterpretationRaw = '';
         let interpretationEditMode = false;
@@ -695,11 +693,16 @@
         const processFilesButton = $('process-files-button');
         const resetButton = $('reset-button');
         const controlsSection = $('controls-section');
-        const sessionSection = $('session-section');
-        const sessionList = $('session-list');
         const groupSelect = $('group-select');
         const sectionSelect = $('section-select');
         const metricSelect = $('metric-select');
+        const analysisModeSelect = $('analysis-mode-select');
+        const radarControls = $('radar-controls');
+        const radarMetricSelector = $('radar-metric-selector');
+        const metricSelectRow = $('metric-select-row');
+        const sessionChartHint = $('session-chart-hint');
+        const radarDisclaimer = $('radar-disclaimer');
+        const chartTypeWrap = $('chart-type-wrap');
         const placeholder = $('placeholder');
         const loading = $('loading');
         const resultsSection = $('results-section');
@@ -707,9 +710,6 @@
         const chartBarBtn = $('chart-bar-btn');
         const chartLineBtn = $('chart-line-btn');
         const summaryTableContainer = $('summary-table-container');
-        const groupedTableContainer = $('grouped-table-container');
-        const flaggedSidebar = $('flagged-sidebar');
-        const flaggedList = $('flagged-list');
         const exportPngBtn = $('export-png-btn');
         const exportCsvBtn = $('export-csv-btn');
         const runStatsBtn = $('run-stats-btn');
@@ -758,9 +758,51 @@
         }
         function splitFourPartRows(rows, groups) { rows.forEach(r => { const m = String(r.metric || ''); const pm = m.match(/^Part\s*([1-4])\s+(.+)$/i); if (pm) { const p = `Part ${pm[1]}`; groups['Four Part Continuous Performance Test'][p].push({ ...r, metric: pm[2].trim() }); } }); }
         function hasRows(group, section) { return allSessions.some(s => sectionRows(s, group, section).length); }
-        function selectedSessions() { return allSessions.filter(s => s.selected !== false); }
+        function selectedSessions() { return allSessions; }
         function availableMetrics(group, section) { const set = new Set(); selectedSessions().forEach(s => sectionRows(s, group, section).forEach(r => set.add(r.metric))); return [...set]; }
         function getSelectedRow(session) { const g = groupSelect.value, sec = sectionSelect.value, m = metricSelect.value; return sectionRows(session, g, sec).find(r => r.metric === m); }
+        function radarDirectionForMetric(metricName) { return RADAR_METRIC_DIRECTION[metricName] || 'high'; }
+        function rowStandardScore(session, group, section, metricName) { const row = sectionRows(session, group, section).find(r => r.metric === metricName); return row !== undefined ? toNum(row.standard_score) : undefined; }
+        function syncAnalysisModeUI() {
+            const radar = analysisMode === 'radar';
+            radarControls.classList.toggle('hidden', !radar);
+            metricSelectRow.classList.toggle('hidden', radar);
+            chartTypeWrap.classList.toggle('hidden', radar);
+            sessionChartHint.classList.toggle('hidden', radar);
+            radarDisclaimer.classList.toggle('hidden', !radar);
+        }
+        function bindRadarMetricSelectorOnce() {
+            if (radarMetricChangeBound) return;
+            radarMetricSelector.addEventListener('change', e => { if (e.target.classList?.contains('radar-metric-checkbox')) renderChartAndTable(); });
+            radarMetricChangeBound = true;
+        }
+        function populateRadarMetricSelector() {
+            bindRadarMetricSelectorOnce();
+            radarMetricSelector.innerHTML = '';
+            const g = groupSelect.value, sec = sectionSelect.value;
+            const ms = availableMetrics(g, sec).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }));
+            ms.forEach((metric, i) => {
+                const id = `rm-cb-${i}`;
+                const div = document.createElement('div');
+                div.style.cssText = 'display:flex;align-items:center;gap:6px;';
+                const inp = document.createElement('input');
+                inp.type = 'checkbox';
+                inp.id = id;
+                inp.className = 'radar-metric-checkbox';
+                inp.checked = true;
+                inp.dataset.metric = metric;
+                const lab = document.createElement('label');
+                lab.htmlFor = id;
+                lab.style.cssText = 'font-size:12px;color:var(--text2);cursor:pointer;';
+                lab.textContent = metric;
+                div.appendChild(inp);
+                div.appendChild(lab);
+                radarMetricSelector.appendChild(div);
+            });
+        }
+        function selectedRadarMetrics() {
+            return [...radarMetricSelector.querySelectorAll('input.radar-metric-checkbox:checked')].map(cb => cb.dataset.metric).filter(Boolean);
+        }
         function resetStatsAndInterpretation() { statsContent.dataset.computed = ''; statsContent.innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">Click <strong style="color:var(--purple);">Run Diagnostics</strong> to compute statistics for the current selected field.</p>'; setInterpretationMarkdown(''); interpretationOutput.textContent = 'Click a button to generate an AI-powered clinical interpretation.'; leaveInterpretationEditView(); }
         function fmtInline(text) { let e = esc(text); e = e.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); e = e.replace(/\*(.+?)\*/g, '<em>$1</em>'); return e; }
         function renderMd(md) { const lines = String(md || '').replace(/\r\n/g, '\n').split('\n'); const out = []; let p = [], li = []; const fp = () => { if (p.length) { out.push(`<p>${p.join('<br>')}</p>`); p = []; } }; const fl = () => { if (li.length) { out.push(`<ul>${li.join('')}</ul>`); li = []; } }; for (const raw of lines) { const ln = raw.trim(); if (!ln) { fp(); fl(); continue; } const hm = ln.match(/^(#{1,6})\s+(.*)$/); if (hm) { fp(); fl(); const lv = Math.min(hm[1].length + 2, 6); out.push(`<h${lv} style="font-weight:600;color:var(--text);margin-bottom:5px;margin-top:12px;">${fmtInline(hm[2])}</h${lv}>`); continue; } const bm = ln.match(/^[-*]\s+(.*)$/); if (bm) { fp(); li.push(`<li>${fmtInline(bm[1])}</li>`); continue; } fl(); p.push(fmtInline(ln)); } fp(); fl(); return out.join('') || `<p>${esc(md || '')}</p>`; }
@@ -779,6 +821,12 @@
         groupSelect.addEventListener('change', () => { populateSections(); resetStatsAndInterpretation(); renderAll(); });
         sectionSelect.addEventListener('change', () => { populateMetrics(); resetStatsAndInterpretation(); renderAll(); });
         metricSelect.addEventListener('change', () => { resetStatsAndInterpretation(); renderAll(); });
+        analysisModeSelect.addEventListener('change', () => {
+            analysisMode = analysisModeSelect.value;
+            if (analysisMode === 'radar') populateRadarMetricSelector();
+            resetStatsAndInterpretation();
+            renderAll();
+        });
         chartBarBtn.addEventListener('click', () => { chartStyle = 'bar'; syncChartButtons(); renderChartAndTable(); });
         chartLineBtn.addEventListener('click', () => { chartStyle = 'line'; syncChartButtons(); renderChartAndTable(); });
         exportPngBtn.addEventListener('click', () => { if (!resultsChart) return; const a = document.createElement('a'); a.href = resultsChart.toBase64Image(); a.download = 'cnsvs-chart.png'; a.click(); });
@@ -800,33 +848,170 @@
         }
         async function parseFiles(files) { const fd = new FormData(); files.forEach(f => fd.append('files', f, f.name)); const res = await fetch('/parse-cnsvs', { method: 'POST', body: fd }); if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || err.error?.message || `HTTP ${res.status}`); } const data = await res.json(); return data.map((s, i) => normalizeSession(s, files[i]?.name)); }
         function renderUploadList() { fileList.innerHTML = uploadedSessions.map((s, i) => `<div class="file-card ${s.selected !== false ? 'selected' : ''}"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" data-i="${i}" ${s.selected !== false ? 'checked' : ''} style="width:auto;"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(labelOf(s))}</div><div class="small">${countScores(s)} score rows</div></div><button class="reorder-button" data-act="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button class="reorder-button" data-act="down" data-i="${i}" ${i === uploadedSessions.length - 1 ? 'disabled' : ''}>↓</button></div></div>`).join(''); fileList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', e => { uploadedSessions[+e.target.dataset.i].selected = e.target.checked; processFilesButton.disabled = !uploadedSessions.some(s => s.selected !== false); renderUploadList(); })); fileList.querySelectorAll('.reorder-button').forEach(btn => btn.addEventListener('click', e => { const i = +e.currentTarget.dataset.i, act = e.currentTarget.dataset.act, j = act === 'up' ? i - 1 : i + 1; if (j < 0 || j >= uploadedSessions.length) return;[uploadedSessions[i], uploadedSessions[j]] = [uploadedSessions[j], uploadedSessions[i]]; renderUploadList(); })); }
-        function renderSessionList() { sessionList.innerHTML = allSessions.map((s, i) => `<div class="file-card ${s.selected !== false ? 'selected' : ''}"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" data-i="${i}" ${s.selected !== false ? 'checked' : ''} style="width:auto;"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(labelOf(s))}</div><div class="small">Graph order: ${i + 1}</div></div><button class="reorder-button" data-act="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button class="reorder-button" data-act="down" data-i="${i}" ${i === allSessions.length - 1 ? 'disabled' : ''}>↓</button></div></div>`).join(''); sessionList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', e => { allSessions[+e.target.dataset.i].selected = e.target.checked; resetStatsAndInterpretation(); renderSessionList(); renderAll(); })); sessionList.querySelectorAll('.reorder-button').forEach(btn => btn.addEventListener('click', e => { const i = +e.currentTarget.dataset.i, act = e.currentTarget.dataset.act, j = act === 'up' ? i - 1 : i + 1; if (j < 0 || j >= allSessions.length) return;[allSessions[i], allSessions[j]] = [allSessions[j], allSessions[i]]; resetStatsAndInterpretation(); renderSessionList(); renderAll(); })); }
         function countScores(s) { let c = 0; GROUP_ORDER.forEach(g => Object.values(s.groups[g] || {}).forEach(rows => c += (rows || []).length)); return c; }
-        function afterProcess() { controlsSection.classList.remove('hidden'); sessionSection.classList.remove('hidden'); flaggedSidebar.classList.remove('hidden'); resultsSection.classList.remove('hidden'); placeholder.classList.add('hidden'); loading.classList.add('hidden'); allSessions.forEach(s => s.selected = true); populateControls(); renderSessionList(); renderAll(); }
-        function resetAll() { uploadedSessions = []; allSessions = []; if (resultsChart) { resultsChart.destroy(); resultsChart = null; } fileInput.value = ''; fileList.innerHTML = ''; sessionList.innerHTML = ''; fileActionButtons.classList.add('hidden'); fileActionButtons.style.display = 'none'; fileListHelper.classList.add('hidden'); controlsSection.classList.add('hidden'); sessionSection.classList.add('hidden'); flaggedSidebar.classList.add('hidden'); resultsSection.classList.add('hidden'); loading.classList.add('hidden'); placeholder.classList.remove('hidden'); }
+        function afterProcess() { analysisMode = 'trend'; analysisModeSelect.value = 'trend'; controlsSection.classList.remove('hidden'); resultsSection.classList.remove('hidden'); placeholder.classList.add('hidden'); loading.classList.add('hidden'); allSessions.forEach(s => s.selected = true); populateControls(); renderAll(); }
+        function resetAll() { uploadedSessions = []; allSessions = []; if (resultsChart) { resultsChart.destroy(); resultsChart = null; } analysisMode = 'trend'; analysisModeSelect.value = 'trend'; fileInput.value = ''; fileList.innerHTML = ''; fileActionButtons.classList.add('hidden'); fileActionButtons.style.display = 'none'; fileListHelper.classList.add('hidden'); controlsSection.classList.add('hidden'); resultsSection.classList.add('hidden'); loading.classList.add('hidden'); placeholder.classList.remove('hidden'); }
         function populateControls() { groupSelect.innerHTML = GROUP_ORDER.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(''); populateSections(); }
         function populateSections() { const g = groupSelect.value; let secs = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES); const avail = secs.filter(sec => hasRows(g, sec)); sectionSelect.innerHTML = (avail.length ? avail : secs).map(sec => `<option value="${esc(sec)}">${esc(sec)}</option>`).join(''); populateMetrics(); }
-        function populateMetrics() { const g = groupSelect.value, sec = sectionSelect.value; const ms = availableMetrics(g, sec); metricSelect.innerHTML = ms.length ? ms.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('') : '<option value="">No field values found</option>'; }
+        function populateMetrics() { const g = groupSelect.value, sec = sectionSelect.value; const ms = availableMetrics(g, sec); metricSelect.innerHTML = ms.length ? ms.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('') : '<option value="">No field values found</option>'; if (analysisMode === 'radar') populateRadarMetricSelector(); }
         function syncChartButtons() { chartBarBtn.classList.toggle('chart-type-active', chartStyle === 'bar'); chartLineBtn.classList.toggle('chart-type-active', chartStyle === 'line'); }
-        function renderAll() { if (!allSessions.length) return; renderSessionList(); renderChartAndTable(); renderGroupedTable(); renderFlaggedSidebar(); if (statsContent.dataset.computed) renderStats(); }
-        function renderChartAndTable() { const sessions = selectedSessions(), g = groupSelect.value, sec = sectionSelect.value, m = metricSelect.value; if (resultsChart) { resultsChart.destroy(); resultsChart = null; } if (!sessions.length || !m) { summaryTableContainer.innerHTML = '<p class="small">Select at least one file and metric.</p>'; return; } const rows = sessions.map(s => ({ session: s, row: getSelectedRow(s) })); const ctx = chartCanvas.getContext('2d'); const type = chartStyle === 'line' ? 'line' : 'bar'; const common = { borderWidth: 2, tension: .25, spanGaps: true, pointRadius: type === 'line' ? 4 : 3 }; resultsChart = new Chart(ctx, { type, data: { labels: rows.map(x => labelOf(x.session)), datasets: [{ label: 'Percentile', data: rows.map(x => x.row?.percentile ?? null), backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, yAxisID: 'y', ...common }, { label: 'Standard Score', data: rows.map(x => x.row?.standard_score ?? null), backgroundColor: CHART_COLORS[1].bg, borderColor: CHART_COLORS[1].border, yAxisID: 'y1', ...common }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `${g} → ${sec} → ${m}`, color: '#e6edf3', font: { size: 14, weight: '600' } }, legend: { labels: { color: '#8b949e' } }, tooltip: { backgroundColor: '#1c2330', borderColor: '#30363d', borderWidth: 1, titleColor: '#e6edf3', bodyColor: '#8b949e', callbacks: { afterLabel: (ctx) => { const r = rows[ctx.dataIndex].row; return r?.flagged ? 'FLAG: Percentile < 30' : ''; } } } }, scales: { x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y: { min: 0, max: 100, title: { display: true, text: 'Percentile', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y1: { position: 'right', title: { display: true, text: 'Standard Score', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { drawOnChartArea: false } } } } }); summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr><th>Order</th><th>File</th><th>Test Name</th><th>Field / Section</th><th>Metric</th><th>Standard Score</th><th>Percentile</th><th>Flag</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td class="td-name">${esc(labelOf(x.session))}</td><td>${esc(g)}</td><td>${esc(sec)}</td><td class="td-name">${esc(m)}</td><td class="${scoreClass(x.row)}">${nfmt(x.row?.standard_score)}</td><td class="${percentileClass(x.row?.percentile)}">${nfmt(x.row?.percentile)}</td><td>${x.row?.flagged ? '<span class="flag-pill">FLAG</span>' : '—'}</td></tr>`).join('')}</tbody></table>`; }
-        function renderGroupedTable() { let html = '<table class="data-table"><thead><tr><th>File</th><th>Test Name</th><th>Field / Section</th><th>Field Value / Metric</th><th>Standard Score</th><th>Percentile</th><th>Flag</th></tr></thead><tbody>'; selectedSessions().forEach(s => { GROUP_ORDER.forEach(g => { const sections = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES); sections.forEach(sec => sectionRows(s, g, sec).forEach(r => { html += `<tr><td class="td-name">${esc(labelOf(s))}</td><td>${esc(g)}</td><td>${esc(sec)}</td><td class="td-name">${esc(r.metric)}</td><td class="${scoreClass(r)}">${nfmt(r.standard_score)}</td><td class="${percentileClass(r.percentile)}">${nfmt(r.percentile)}</td><td>${r.flagged ? '<span class="flag-pill">FLAG</span>' : '—'}</td></tr>`; })); }); }); html += '</tbody></table>'; groupedTableContainer.innerHTML = html; }
-        function renderFlaggedSidebar() { const items = []; allSessions.forEach(s => GROUP_ORDER.forEach(g => { const sections = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES); sections.forEach(sec => sectionRows(s, g, sec).forEach(r => { if (r.flagged) items.push({ s, g, sec, r }); })); })); flaggedList.innerHTML = items.length ? items.map(x => `<div style="padding:8px;border:1px solid var(--border2);border-radius:6px;background:rgba(248,81,73,.07);"><div style="font-size:12px;color:var(--text);font-weight:600;">${esc(x.r.metric)}</div><div class="small">${esc(labelOf(x.s))} · ${esc(x.sec)}</div><div style="font-size:11px;color:var(--red);margin-top:3px;">Percentile ${nfmt(x.r.percentile)} | SS ${nfmt(x.r.standard_score)}</div></div>`).join('') : '<p class="small">No flagged values found.</p>'; }
+        function renderRadarChartAndTable() {
+            const sessions = selectedSessions(), g = groupSelect.value, sec = sectionSelect.value;
+            const radarMetrics = selectedRadarMetrics();
+            if (!sessions.length) { summaryTableContainer.innerHTML = '<p class="small">Select at least one file.</p>'; return; }
+            if (!radarMetrics.length) { summaryTableContainer.innerHTML = '<p class="small">Select at least one profile metric (axis).</p>'; return; }
+            let anySs = false;
+            sessions.forEach(s => { radarMetrics.forEach(m => { if (rowStandardScore(s, g, sec, m) !== undefined) anySs = true; }); });
+            if (!anySs) { summaryTableContainer.innerHTML = '<p class="small">No standard scores found for the current test and section.</p>'; return; }
+            const short = s => { const L = labelOf(s); return L.length > 22 ? '…' + L.slice(-19) : L; };
+            const labels = sessions.map(short);
+            const nf = sessions.length;
+            const maxValues = {};
+            radarMetrics.forEach(m => {
+                let mx = 0;
+                sessions.forEach(s => { const v = rowStandardScore(s, g, sec, m); if (v !== undefined && Math.abs(v) > mx) mx = Math.abs(v); });
+                maxValues[m] = mx === 0 ? 1 : mx;
+            });
+            const chartData = {
+                labels: radarMetrics,
+                datasets: sessions.map((s, i) => {
+                    const nd = [], od = [];
+                    radarMetrics.forEach(m => {
+                        const v = rowStandardScore(s, g, sec, m);
+                        od.push(v);
+                        if (v === undefined) { nd.push(NaN); return; }
+                        let n = v / maxValues[m];
+                        if (radarDirectionForMetric(m) === 'low') n = 1 - Math.abs(n);
+                        if (n < 0) n = 0;
+                        nd.push(n * 100);
+                    });
+                    return {
+                        label: labels[i],
+                        data: nd,
+                        originalData: od,
+                        spanGaps: true,
+                        backgroundColor: CHART_COLORS[i % CHART_COLORS.length].bg,
+                        borderColor: CHART_COLORS[i % CHART_COLORS.length].border,
+                        borderWidth: 2,
+                        pointBackgroundColor: CHART_COLORS[i % CHART_COLORS.length].border,
+                        pointBorderColor: '#161b22',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: CHART_COLORS[i % CHART_COLORS.length].border
+                    };
+                })
+            };
+            const ctx = chartCanvas.getContext('2d');
+            const profileTitle = `${g} → ${sec}`;
+            resultsChart = new Chart(ctx, {
+                type: 'radar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    elements: { line: { tension: 0.1 } },
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            min: 0,
+                            max: 100,
+                            pointLabels: { font: { size: 11 }, color: '#8b949e' },
+                            ticks: { display: false, stepSize: 25 },
+                            angleLines: { color: 'rgba(48,54,61,0.8)' },
+                            grid: { color: 'rgba(48,54,61,0.6)' }
+                        }
+                    },
+                    plugins: {
+                        title: { display: true, text: `Profile: ${profileTitle}`, font: { size: 14, weight: '600' }, color: '#e6edf3' },
+                        legend: { labels: { color: '#8b949e', font: { size: 11 } } },
+                        tooltip: {
+                            backgroundColor: '#1c2330',
+                            borderColor: '#30363d',
+                            borderWidth: 1,
+                            titleColor: '#e6edf3',
+                            bodyColor: '#8b949e',
+                            callbacks: {
+                                label(ctx) {
+                                    const orig = ctx.dataset.originalData[ctx.dataIndex];
+                                    const r = ctx.parsed.r;
+                                    const rStr = r != null && Number.isFinite(r) ? r.toFixed(1) : 'N/A';
+                                    const oStr = orig !== undefined && Number.isFinite(orig) ? nfmt(orig) : 'N/A';
+                                    return `${ctx.dataset.label}: SS ${oStr} (normalized ${rStr})`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            let headCells = `<th>Metric</th>${sessions.map(s => `<th class="td-name">${esc(labelOf(s))}</th>`).join('')}`;
+            if (nf === 2) headCells += '<th>Δ SS</th><th>% change</th>';
+            else if (nf > 2) headCells += '<th>Mean SS</th><th>SD</th>';
+            let tbody = '';
+            radarMetrics.forEach(m => {
+                const vals = sessions.map(s => rowStandardScore(s, g, sec, m));
+                let row = `<tr><td class="td-name">${esc(m)}</td>`;
+                vals.forEach(v => { row += `<td>${v !== undefined ? nfmt(v) : '—'}</td>`; });
+                if (nf === 2) {
+                    const [v1, v2] = vals;
+                    if (v1 !== undefined && v2 !== undefined) {
+                        const ch = v2 - v1;
+                        const pct = v1 !== 0 ? (ch / v1) * 100 : 0;
+                        row += `<td>${nfmt(ch)}</td><td>${Number.isFinite(pct) ? pct.toFixed(1) + '%' : '—'}</td>`;
+                    } else row += '<td>—</td><td>—</td>';
+                } else if (nf > 2) {
+                    const numVals = vals.filter(v => v !== undefined);
+                    if (numVals.length) {
+                        const mMean = mean(numVals);
+                        const sd = sdSample(numVals);
+                        row += `<td>${nfmt(mMean)}</td><td>${nfmt(sd)}</td>`;
+                    } else row += '<td>—</td><td>—</td>';
+                }
+                row += '</tr>';
+                tbody += row;
+            });
+            summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr>${headCells}</tr></thead><tbody>${tbody}</tbody></table>`;
+        }
+        function renderAll() { if (!allSessions.length) return; renderChartAndTable(); if (statsContent.dataset.computed) renderStats(); }
+        function renderChartAndTable() {
+            if (resultsChart) { resultsChart.destroy(); resultsChart = null; }
+            syncAnalysisModeUI();
+            if (analysisMode === 'radar') { renderRadarChartAndTable(); return; }
+            const sessions = selectedSessions(), g = groupSelect.value, sec = sectionSelect.value, m = metricSelect.value;
+            if (!sessions.length || !m) { summaryTableContainer.innerHTML = '<p class="small">Select at least one file and metric.</p>'; return; }
+            const rows = sessions.map(s => ({ session: s, row: getSelectedRow(s) }));
+            const ctx = chartCanvas.getContext('2d');
+            const type = chartStyle === 'line' ? 'line' : 'bar';
+            const common = { borderWidth: 2, tension: .25, spanGaps: true, pointRadius: type === 'line' ? 4 : 3 };
+            resultsChart = new Chart(ctx, { type, data: { labels: rows.map(x => labelOf(x.session)), datasets: [{ label: 'Percentile', data: rows.map(x => x.row?.percentile ?? null), backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, yAxisID: 'y', ...common }, { label: 'Standard Score', data: rows.map(x => x.row?.standard_score ?? null), backgroundColor: CHART_COLORS[1].bg, borderColor: CHART_COLORS[1].border, yAxisID: 'y1', ...common }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `${g} → ${sec} → ${m}`, color: '#e6edf3', font: { size: 14, weight: '600' } }, legend: { labels: { color: '#8b949e' } }, tooltip: { backgroundColor: '#1c2330', borderColor: '#30363d', borderWidth: 1, titleColor: '#e6edf3', bodyColor: '#8b949e', callbacks: { afterLabel: (ctx) => { const r = rows[ctx.dataIndex].row; return r?.flagged ? 'FLAG: Percentile < 30' : ''; } } } }, scales: { x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y: { min: 0, max: 100, title: { display: true, text: 'Percentile', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y1: { position: 'right', title: { display: true, text: 'Standard Score', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { drawOnChartArea: false } } } } });
+            summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr><th>Order</th><th>File</th><th>Test Name</th><th>Field / Section</th><th>Metric</th><th>Standard Score</th><th>Percentile</th><th>Flag</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td class="td-name">${esc(labelOf(x.session))}</td><td>${esc(g)}</td><td>${esc(sec)}</td><td class="td-name">${esc(m)}</td><td class="${scoreClass(x.row)}">${nfmt(x.row?.standard_score)}</td><td class="${percentileClass(x.row?.percentile)}">${nfmt(x.row?.percentile)}</td><td>${x.row?.flagged ? '<span class="flag-pill">FLAG</span>' : '—'}</td></tr>`).join('')}</tbody></table>`;
+        }
+        function buildGroupedDataTextForReport() {
+            const rows = ['File | Test Name | Field / Section | Field Value / Metric | Standard Score | Percentile | Flag'];
+            selectedSessions().forEach(s => {
+                GROUP_ORDER.forEach(g => {
+                    const sections = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES);
+                    sections.forEach(sec => sectionRows(s, g, sec).forEach(r => {
+                        rows.push([labelOf(s), g, sec, r.metric, nfmt(r.standard_score), nfmt(r.percentile), r.flagged ? 'FLAG' : '—'].join(' | '));
+                    }));
+                });
+            });
+            return rows.join('\n');
+        }
         function currentSeries() { return selectedSessions().map((s, i) => ({ i, s, row: getSelectedRow(s) })).filter(x => x.row); }
         function renderStats() {
+            if (analysisMode === 'radar') { statsContent.innerHTML = '<p class="small">Statistical diagnostics use the single-metric trend view. Switch visualization mode to <strong>Trend by session (line / bar)</strong>, choose one metric, then run diagnostics.</p>'; return; }
             const rows = currentSeries(), p = rows.map(x => x.row.percentile).filter(v => v !== undefined), ss = rows.map(x => x.row.standard_score).filter(v => v !== undefined); if (!rows.length) { statsContent.innerHTML = '<p class="small">No numeric data for selected field.</p>'; return; } const dsP = descStats(p), dsS = descStats(ss); const idx = rows.map(x => x.i + 1); let html = ''; if (activeStatTab === 'descriptive') { html += statSection('Percentile Descriptive', statRows(dsP)); html += statSection('Standard Score Descriptive', statRows(dsS)); }
             else if (activeStatTab === 'inferential') { const first = rows[0].row.percentile, last = rows[rows.length - 1].row.percentile, delta = (last ?? 0) - (first ?? 0); const sdv = sdSample(p); const z = sdv ? delta / sdv : undefined; html += statSection('Change Inference', [['First → Last', `${nfmt(first)} → ${nfmt(last)}`, 'Absolute percentile change across selected ordered sessions.'], ['Delta', nfmt(delta), 'Positive means percentile improved; negative means percentile declined.'], ['Effect Size (Δ/SD)', nfmt(z), 'Rule of thumb only; small samples are descriptive, not confirmatory.'], ['Flag Burden', `${rows.filter(x => x.row.flagged).length}/${rows.length}`, 'Number of sessions below percentile threshold.']]); }
             else if (activeStatTab === 'correlation') { const rp = pearson(idx, p), rsp = spearman(idx, p), rss = pearson(p, ss); html += statSection('Correlation', [['Session Order vs Percentile', nfmt(rp), 'Pearson correlation across selected file order.'], ['Spearman Trend', nfmt(rsp), 'Rank-based monotonic trend across sessions.'], ['Percentile vs Standard Score', nfmt(rss), 'Association between percentile and standard score.']]); }
             else if (activeStatTab === 'regression') { const regP = linReg(idx, p), regS = linReg(idx, ss); html += statSection('Linear Regression', [['Percentile Slope', nfmt(regP?.slope), 'Average percentile change per selected session step.'], ['Percentile R²', nfmt(regP?.r2), 'Proportion of percentile variance explained by session order.'], ['Standard Score Slope', nfmt(regS?.slope), 'Average standard score change per selected session step.'], ['Standard Score R²', nfmt(regS?.r2), 'Proportion of standard score variance explained by session order.']]); }
             else if (activeStatTab === 'multivariate') { const flagged = rows.filter(x => x.row.flagged).length; html += statSection('Multivariate Snapshot', [['Variables Used', 'Percentile + Standard Score', 'Current CNSVS field combines both values.'], ['Mean Percentile / SS', `${nfmt(dsP?.mean)} / ${nfmt(dsS?.mean)}`, 'Combined central tendency.'], ['CV Percentile / SS', `${nfmt(dsP?.cv)}% / ${nfmt(dsS?.cv)}%`, 'Higher CV suggests more variability.'], ['Flag Rate', `${nfmt(flagged / rows.length * 100)}%`, 'Share of selected sessions below percentile 30.']]); }
-            else { const deltas = rows.slice(1).map((x, i) => ({ from: labelOf(rows[i].s), to: labelOf(x.s), d: (x.row.percentile ?? 0) - (rows[i].row.percentile ?? 0) })); html += statSection('Longitudinal Pattern', [['Sessions Included', String(rows.length), 'Only checked files are included, in the displayed order.'], ['Net Change', nfmt((rows.at(-1).row.percentile ?? 0) - (rows[0].row.percentile ?? 0)), 'Last percentile minus first percentile.'], ['Largest Step Change', deltas.length ? `${deltas.sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0].from} → ${deltas[0].to}: ${nfmt(deltas[0].d)}` : '—', 'Largest session-to-session percentile movement.'], ['Direction', trendText(p), 'Overall directional pattern.']]); }
+            else { const deltas = rows.slice(1).map((x, i) => ({ from: labelOf(rows[i].s), to: labelOf(x.s), d: (x.row.percentile ?? 0) - (rows[i].row.percentile ?? 0) })); html += statSection('Longitudinal Pattern', [['Sessions Included', String(rows.length), 'All processed files are included, in upload list order.'], ['Net Change', nfmt((rows.at(-1).row.percentile ?? 0) - (rows[0].row.percentile ?? 0)), 'Last percentile minus first percentile.'], ['Largest Step Change', deltas.length ? `${deltas.sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0].from} → ${deltas[0].to}: ${nfmt(deltas[0].d)}` : '—', 'Largest session-to-session percentile movement.'], ['Direction', trendText(p), 'Overall directional pattern.']]); }
             statsContent.innerHTML = html;
         }
         function trendText(vals) { if (vals.length < 2) return 'Insufficient data'; const d = vals.at(-1) - vals[0]; if (Math.abs(d) < 3) return 'Stable / minimal net change'; return d > 0 ? 'Improving percentile trend' : 'Declining percentile trend'; }
         function statRows(ds) { if (!ds) return [['N', '0', 'No data']]; return [['N', ds.n, 'Number of selected sessions with values.'], ['Mean', nfmt(ds.mean), 'Average value.'], ['Median', nfmt(ds.median), 'Middle value.'], ['SD', nfmt(ds.sd), 'Session-to-session variability.'], ['Min / Max', `${nfmt(ds.min)} / ${nfmt(ds.max)}`, 'Observed range.'], ['IQR', nfmt(ds.iqr), 'Middle 50% spread.'], ['CV', `${nfmt(ds.cv)}%`, 'Relative variability.']]; }
         function statSection(title, rows) { return `<div class="stat-section"><div class="stat-section-header">${esc(title)}</div><div class="stat-section-body">${rows.map(r => `<div class="stat-row"><div class="stat-label">${esc(r[0])}</div><div class="stat-value">${esc(r[1])}</div><div class="stat-commentary">${esc(r[2])}</div></div>`).join('')}</div></div>`; }
         function exportCsv() { const table = summaryTableContainer.querySelector('table'); if (!table) return; const csv = [...table.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`).join(',')).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cnsvs-selected-values.csv'; a.click(); URL.revokeObjectURL(a.href); }
-        function buildReportDump() { const table = groupedTableContainer.querySelector('table'); const grouped = table ? [...table.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')).join('\n') : ''; const selected = summaryTableContainer.querySelector('table') ? [...summaryTableContainer.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')).join('\n') : ''; return `[Selected Field]\n${selected}\n\n[Complete Grouped CNSVS Data]\n${grouped}`; }
+        function buildReportDump() { const grouped = buildGroupedDataTextForReport(); const selected = summaryTableContainer.querySelector('table') ? [...summaryTableContainer.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')).join('\n') : ''; return `[Selected Field]\n${selected}\n\n[Complete Grouped CNSVS Data]\n${grouped}`; }
         async function callAI(systemPrompt, userMessage) { let response; try { response = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_tokens: AI_REQUEST_DEFAULTS.maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }) }); } catch (ne) { throw new Error(`Network error: ${ne.message}`); } if (!response.ok) { const p = await response.json().catch(() => ({})); throw new Error(p?.error?.message || `HTTP ${response.status}`); } const result = await response.json(); if (result.content?.[0]?.text) return result.content[0].text; throw new Error('Unexpected response format.'); }
         function setButtonsLoading(which, on) { const map = { full: [fullReportBtn, 'full-report-btn-text', 'Full Report'], interpret: [interpretationButton, 'interpret-button-text', 'Interpret View'], exec: [execSummaryBtn, 'exec-summary-btn-text', 'Executive Summary'] }; Object.values(map).forEach(([btn]) => btn.disabled = on); editInterpretationBtn.disabled = on || !lastInterpretationRaw.trim(); if (map[which]) $(map[which][1]).textContent = on ? 'Generating…' : map[which][2]; if (!on) { Object.values(map).forEach(([btn, id, txt]) => $(id).textContent = txt); } }
         async function generateFullReport() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('full', true); interpretationOutput.textContent = 'Generating comprehensive report…'; const sys = 'You are a clinical expert in neurocognitive CNS Vital Signs interpretation. Provide a comprehensive structured interpretation. Structure: Executive Summary → Cognitive Domain Scores → Specific Test Scores → Four Part Continuous Performance Test → Statistical Highlights → Clinical Considerations. Be evidence-based and non-diagnostic. Flag percentile <30.'; try { const text = await callAI(sys, `Create a full CNSVS report from this grouped data:\n\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('full', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
