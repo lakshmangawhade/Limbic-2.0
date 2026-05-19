@@ -18,10 +18,18 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 
+_THIS_DIR = Path(__file__).resolve().parent
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(_THIS_DIR.parent / ".env")
+    load_dotenv(_THIS_DIR / ".env")
+except ImportError:
+    pass
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-_THIS_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -255,8 +263,17 @@ def parse_text(text: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
 
 
 def parse_cnsvs_pdf(pdf_path: str, pdf_name: str) -> Dict[str, Any]:
+    full_text = extract_text_from_pdf(pdf_path)
     table_domains, table_tests = parse_tables(extract_tables_from_pdf(pdf_path))
-    text_domains, text_tests = parse_text(extract_text_from_pdf(pdf_path))
+    text_domains, text_tests = parse_text(full_text)
+
+    scales: Dict[str, List[Dict[str, Any]]] = {}
+    try:
+        from scales_llm import parse_scales_from_text as extract_scales
+
+        scales = extract_scales(full_text)
+    except Exception as exc:
+        logger.warning("Scales extraction failed for %s: %s", pdf_name, exc)
 
     domain_scores = table_domains[:]
     for d in text_domains:
@@ -272,6 +289,7 @@ def parse_cnsvs_pdf(pdf_path: str, pdf_name: str) -> Dict[str, Any]:
         "processing_timestamp": datetime.now(timezone.utc).isoformat(),
         "domain_scores": domain_scores,
         "tests": tests,
+        "scales": scales,
     }
 
 
@@ -288,7 +306,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "cnsvs-parse"}
+    groq_key = bool((os.getenv("GROQ_API_KEY") or "").strip())
+    return {
+        "status": "ok",
+        "service": "cnsvs-parse",
+        "scales_extraction": (os.getenv("SCALES_EXTRACTION_MODE") or "llm").strip().lower(),
+        "groq_configured": groq_key,
+        "groq_model": (os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile") if groq_key else None,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -317,7 +342,13 @@ async def parse_cnsvs(files: List[UploadFile] = File(...)):
                 f.write(await upload.read())
             session = parse_cnsvs_pdf(pdf_path, filename)
             sessions.append(session)
-            logger.info("Parsed %s: %d domains, %d tests", filename, len(session["domain_scores"]), len(session["tests"]))
+            logger.info(
+                "Parsed %s: %d domains, %d tests, %d scales",
+                filename,
+                len(session["domain_scores"]),
+                len(session["tests"]),
+                len(session.get("scales") or {}),
+            )
         except Exception as exc:
             logger.error("Failed to parse %s: %s\n%s", filename, exc, traceback.format_exc())
             errors.append({"file": filename, "error": str(exc)})

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CNSVS Cognitive Analysis Dashboard</title>
+    <title>CNSVS Scales Analysis Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
@@ -492,10 +492,10 @@
                     style="width:32px;height:32px;background:var(--accent2);border-radius:8px;display:flex;align-items:center;justify-content:center;">
                     🧠</div>
                 <h1 style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin:0;">CNSVS
-                    Cognitive Analysis Dashboard</h1>
+                    Scales Analysis Dashboard</h1>
             </div>
-            <p style="font-size:13px;color:var(--text3);margin-left:44px;">Cognitive → Cognitive Domain Scores ·
-                Specific Test Scores · Four Part Continuous Performance Test · Multi-session comparison</p>
+            <p style="font-size:13px;color:var(--text3);margin-left:44px;">GAD-7 · NPQ SF-45 · PHQ-9 · PSQI · PCL-5 ·
+                Multi-session comparison</p>
         </header>
 
         <div style="display:flex;gap:20px;align-items:flex-start;">
@@ -530,8 +530,11 @@
                                 <option value="trend">Trend by session (line / bar)</option>
                                 <option value="radar">Radar chart (test profile)</option>
                             </select></div>
-                        <div><label>Test Name</label><select id="group-select"></select></div>
-                        <div><label>Field / Section</label><select id="section-select"></select></div>
+                        <div><label>Scale</label><select id="section-select"></select></div>
+                        <div id="npq-view-row" class="hidden"><label>NPQ view</label><select id="npq-view-select">
+                                <option value="domains">Domain Scores</option>
+                                <option value="questions">Questions</option>
+                            </select></div>
                         <div id="metric-select-row"><label>Field Value / Metric</label><select
                                 id="metric-select"></select></div>
                         <div id="radar-controls" class="hidden">
@@ -549,7 +552,7 @@
                     <div style="font-size:48px;margin-bottom:12px;color:var(--text3);">🧠</div>
                     <h3 style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Waiting for data
                     </h3>
-                    <p style="font-size:13px;color:var(--text3);">Upload CNSVS PDF reports to begin cognitive analysis.
+                    <p style="font-size:13px;color:var(--text3);">Upload CNSVS PDF reports to begin scales analysis.
                     </p>
                 </div>
 
@@ -585,8 +588,7 @@
                                     id="results-chart"></canvas></div>
                             <p id="session-chart-hint"
                                 style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">
-                                Graph uses processed files in the same order as the upload list (after Process).
-                                Dataset 1 = percentile. Dataset 2 = standard score.</p>
+                                Graph uses processed files in upload list order (after Process).</p>
                             <p id="radar-disclaimer" class="hidden"
                                 style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center;font-style:italic;">
                                 Standard scores normalized 0–100 per axis using the max |SS| across selected sessions.
@@ -659,11 +661,19 @@
 
         const FLAG_THRESHOLD = 30;
         const AI_REQUEST_DEFAULTS = { maxTokens: 3000 };
-        const GROUP_ORDER = ['Cognitive', 'Specific Test Scores', 'Four Part Continuous Performance Test'];
-        const DOMAIN_SECTION = 'Cognitive Domain Scores';
-        const DOMAIN_ORDER = ['Neurocognition Index (NCI)', 'Composite Memory', 'Verbal Memory', 'Visual Memory', 'Psychomotor Speed', 'Reaction Time', 'Complex Attention', 'Cognitive Flexibility', 'Processing Speed', 'Executive Function', 'Social Acuity', 'Reasoning', 'Working Memory', 'Sustained Attention', 'Simple Attention', 'Motor Speed'];
-        const SPECIFIC_TEST_NAMES = ['Verbal Memory Test (VBM)', 'Visual Memory Test (VSM)', 'Finger Tapping Test (FTT)', 'Symbol Digit Coding (SDC)', 'Stroop Test (ST)', 'Shifting Attention Test (SAT)', 'Continuous Performance Test (CPT)', 'Perception Of Emotions Test (POET)', 'Positive Emotions', 'Negative Emotions', 'Reasoning Test (RT)'];
-        const FOUR_PART_NAMES = ['Part 1', 'Part 2', 'Part 3', 'Part 4'];
+        const ACTIVE_GROUP = 'Scales';
+        const SCALE_NAMES = [
+            'Generalized Anxiety Disorder 7-item (GAD-7) Scale',
+            'NeuroPsych Questionnaire (NPQ) SF-45',
+            'Patient Health Questionnaire (PHQ-9)',
+            'Pittsburgh Sleep Quality Index (PSQI) SF-10',
+            'The PTSD Checklist (PCL-5) SF-20',
+        ];
+        const NPQ_SCALE_NAME = 'NeuroPsych Questionnaire (NPQ) SF-45';
+        const NPQ_DOMAIN_ORDER = [
+            'Attention', 'Impulsive', 'Memory', 'Anxiety', 'Panic', 'Depression',
+            'Mood Stability', 'Aggression', 'Fatigue', 'Sleep', 'Suicide', 'Pain',
+        ];
         const CHART_COLORS = [
             { bg: 'rgba(88,166,255,.32)', border: 'rgba(88,166,255,1)', solid: '#58a6ff' },
             { bg: 'rgba(63,185,80,.25)', border: 'rgba(63,185,80,1)', solid: '#3fb950' },
@@ -693,8 +703,9 @@
         const processFilesButton = $('process-files-button');
         const resetButton = $('reset-button');
         const controlsSection = $('controls-section');
-        const groupSelect = $('group-select');
         const sectionSelect = $('section-select');
+        const npqViewRow = $('npq-view-row');
+        const npqViewSelect = $('npq-view-select');
         const metricSelect = $('metric-select');
         const analysisModeSelect = $('analysis-mode-select');
         const radarControls = $('radar-controls');
@@ -738,31 +749,153 @@
         function spearman(x, y) { if (x.length !== y.length || x.length < 2) return undefined; return pearson(rankTies(x), rankTies(y)); }
         function linReg(x, y) { if (x.length !== y.length || x.length < 2) return undefined; const mx = mean(x), my = mean(y); const sxx = x.reduce((a, v) => a + (v - mx) ** 2, 0); if (!sxx) return undefined; const sxy = x.reduce((a, v, i) => a + (v - mx) * (y[i] - my), 0); const slope = sxy / sxx, intercept = my - slope * mx; const yhat = x.map(v => intercept + slope * v), ssTot = y.reduce((a, v) => a + (v - my) ** 2, 0), ssRes = y.reduce((a, v, i) => a + (v - yhat[i]) ** 2, 0); return { slope, intercept, r2: ssTot ? 1 - ssRes / ssTot : 0 }; }
         function descStats(vals) { const n = vals.map(toNum).filter(v => v !== undefined); if (!n.length) return undefined; const s = [...n].sort((a, b) => a - b), m = mean(n), sd = sdSample(n), q25 = quantile(s, .25), q75 = quantile(s, .75); return { n: n.length, mean: m, median: median(n), sd, min: s[0], max: s[s.length - 1], q25, q75, iqr: q75 - q25, range: s[s.length - 1] - s[0], cv: (m && sd !== undefined) ? sd / Math.abs(m) * 100 : undefined }; }
-        function sectionRows(session, group, section) { return (((session.groups || {})[group] || {})[section] || []).map(normalizeRow).filter(Boolean); }
-        function normalizeRow(row) { if (!row) return null; const metric = row.metric || row.domain || row.name || row.label || ''; if (!metric) return null; const ss = toNum(row.standard_score ?? row.score ?? row.StandardScore ?? row['Standard Score']); const perc = toNum(row.percentile ?? row.Percentile); return { metric, domain: row.domain || metric, standard_score: ss, percentile: perc, flagged: row.flagged === true || (perc !== undefined && perc < FLAG_THRESHOLD) }; }
-        function emptyGroups() { return { Cognitive: { [DOMAIN_SECTION]: [] }, 'Specific Test Scores': Object.fromEntries(SPECIFIC_TEST_NAMES.map(x => [x, []])), 'Four Part Continuous Performance Test': Object.fromEntries(FOUR_PART_NAMES.map(x => [x, []])) }; }
-        function isDomainName(name) { const n = String(name || '').toLowerCase(); return DOMAIN_ORDER.some(d => d.toLowerCase() === n || d.toLowerCase().includes(n) || n.includes(d.toLowerCase())); }
-        function normalizeSession(raw, fallbackName = 'Session.pdf') {
-            const s = raw || {}; const groups = emptyGroups();
-            if (s.groups) { GROUP_ORDER.forEach(g => Object.entries(s.groups[g] || {}).forEach(([sec, rows]) => { groups[g][sec] = (Array.isArray(rows) ? rows : []).map(normalizeRow).filter(Boolean); })); }
-            if (!groups.Cognitive[DOMAIN_SECTION].length && Array.isArray(s.domain_scores)) { groups.Cognitive[DOMAIN_SECTION] = s.domain_scores.map(x => normalizeRow({ ...x, metric: x.domain || x.metric })).filter(Boolean); }
-            Object.entries(s.tests || {}).forEach(([name, rows]) => {
-                const clean = name === 'Four Part Continuous Performance Test (FPCPT)' ? 'Four Part Continuous Performance Test' : name;
-                const arr = (Array.isArray(rows) ? rows : []).map(normalizeRow).filter(Boolean);
-                if (SPECIFIC_TEST_NAMES.includes(clean)) groups['Specific Test Scores'][clean] = arr;
-                else if (FOUR_PART_NAMES.includes(clean)) groups['Four Part Continuous Performance Test'][clean] = arr;
-                else if (clean === 'Four Part Continuous Performance Test') splitFourPartRows(arr, groups);
-            });
-            if (!groups.Cognitive[DOMAIN_SECTION].length && Array.isArray(s.domain_scores)) groups.Cognitive[DOMAIN_SECTION] = s.domain_scores.map(normalizeRow).filter(Boolean);
-            return { pdf_name: s.pdf_name || fallbackName, label: (s.label || s.pdf_name || fallbackName).replace(/\.pdf$/i, ''), groups, domain_scores: groups.Cognitive[DOMAIN_SECTION], tests: { ...groups['Specific Test Scores'], ...groups['Four Part Continuous Performance Test'] }, selected: true };
+        function sectionRows(session, section) {
+            const raw = (((session.groups || {})[ACTIVE_GROUP] || {})[section] || []).map(normalizeRow).filter(Boolean);
+            return filterScaleRows(raw, section);
         }
-        function splitFourPartRows(rows, groups) { rows.forEach(r => { const m = String(r.metric || ''); const pm = m.match(/^Part\s*([1-4])\s+(.+)$/i); if (pm) { const p = `Part ${pm[1]}`; groups['Four Part Continuous Performance Test'][p].push({ ...r, metric: pm[2].trim() }); } }); }
-        function hasRows(group, section) { return allSessions.some(s => sectionRows(s, group, section).length); }
+        function sectionRowsAll(session, section) {
+            return (((session.groups || {})[ACTIVE_GROUP] || {})[section] || []).map(normalizeRow).filter(Boolean);
+        }
+        function npqQuestionsForDomain(session, domain) {
+            return sectionRowsAll(session, NPQ_SCALE_NAME)
+                .filter(r => (r.row_type || '') === 'item' && npqDomainFromRow(r) === domain)
+                .sort((a, b) => (a.sort_index ?? 9999) - (b.sort_index ?? 9999));
+        }
+        function rowScore(row) { return toNum(row?.score ?? row?.standard_score); }
+        function isScalesGroup() { return true; }
+        function sectionsForGroup() { return SCALE_NAMES; }
+        function normalizeRow(row) {
+            if (!row) return null;
+            const metric = row.metric || row.domain || row.name || row.label || '';
+            if (!metric) return null;
+            const ss = toNum(row.standard_score ?? row.score ?? row.StandardScore ?? row['Standard Score']);
+            const perc = toNum(row.percentile ?? row.Percentile);
+            return {
+                metric,
+                domain: row.domain || metric,
+                score: ss,
+                standard_score: ss,
+                percentile: perc,
+                severity: String(row.severity || '').trim(),
+                response: String(row.response || '').trim(),
+                row_type: row.row_type || '',
+                sort_index: toNum(row.sort_index),
+                npq_domain: String(row.npq_domain || '').trim(),
+                flagged: row.flagged === true || (perc !== undefined && perc < FLAG_THRESHOLD),
+            };
+        }
+        function isNpqSection(sec) { return (sec ?? sectionSelect.value) === NPQ_SCALE_NAME; }
+        function npqViewMode() { return npqViewSelect?.value || 'domains'; }
+        function syncNpqViewUI() {
+            const show = isScalesGroup() && isNpqSection();
+            npqViewRow?.classList.toggle('hidden', !show);
+            const label = metricSelectRow?.querySelector('label');
+            if (label) label.textContent = show && npqViewMode() === 'questions' ? 'Question domain' : 'Field Value / Metric';
+        }
+        function npqDomainFromRow(row) {
+            if (!row) return '';
+            if (row.npq_domain) return row.npq_domain;
+            const m = String(row.metric || '');
+            const sep = m.includes(' · ') ? ' · ' : (m.includes(' - ') ? ' - ' : '');
+            if (!sep) return '';
+            const dom = m.split(sep)[0].trim();
+            return NPQ_DOMAIN_ORDER.includes(dom) ? dom : '';
+        }
+        function npqQuestionLabel(row) {
+            const m = String(row.metric || '');
+            const i = m.indexOf(' · ');
+            return i >= 0 ? m.slice(i + 3).trim() : m;
+        }
+        function filterScaleRows(rows, sec) {
+            if (!isNpqSection(sec)) return rows;
+            const mode = npqViewMode();
+            if (mode === 'domains') return rows.filter(r => (r.row_type || '') === 'domain');
+            return rows.filter(r => (r.row_type || '') === 'item' && npqDomainFromRow(r));
+        }
+        function metricSortKey(metric, sec) {
+            if (isNpqSection(sec) && npqViewMode() === 'questions') {
+                const di = NPQ_DOMAIN_ORDER.indexOf(metric);
+                if (di >= 0) return di + 1;
+            }
+            const rows = [];
+            selectedSessions().forEach(s => sectionRowsAll(s, sec).forEach(r => { if (r.metric === metric) rows.push(r); }));
+            const row = rows[0];
+            if (row?.sort_index !== undefined) return row.sort_index;
+            const im = String(metric).match(/^Item\s+(\d+)/i);
+            if (im) return parseInt(im[1], 10);
+            const di = NPQ_DOMAIN_ORDER.indexOf(metric);
+            if (di >= 0) return di + 1;
+            return 5000;
+        }
+        function orderedQuestionLabels(sessions, domain) {
+            const seen = new Set();
+            const ordered = [];
+            sessions.forEach(s => {
+                npqQuestionsForDomain(s, domain).forEach(r => {
+                    const lbl = npqQuestionLabel(r);
+                    if (!lbl || seen.has(lbl)) return;
+                    seen.add(lbl);
+                    ordered.push({ lbl, order: r.sort_index ?? 9999 });
+                });
+            });
+            ordered.sort((a, b) => a.order - b.order);
+            return ordered.map(x => x.lbl);
+        }
+        function emptyGroups() {
+            return { Scales: Object.fromEntries(SCALE_NAMES.map(x => [x, []])) };
+        }
+        function normalizeSession(raw, fallbackName = 'Session.pdf') {
+            const s = raw || {};
+            const groups = emptyGroups();
+            const scaleSrc = s.scales || (s.groups && s.groups.Scales) || {};
+            Object.entries(scaleSrc).forEach(([name, rows]) => {
+                const arr = (Array.isArray(rows) ? rows : []).map(normalizeRow).filter(Boolean);
+                if (!arr.length) return;
+                if (groups.Scales[name] !== undefined) groups.Scales[name] = arr;
+                else groups.Scales[name] = arr;
+            });
+            return {
+                pdf_name: s.pdf_name || fallbackName,
+                label: (s.label || s.pdf_name || fallbackName).replace(/\.pdf$/i, ''),
+                groups,
+                scales: groups.Scales,
+                selected: true,
+            };
+        }
+        function hasRows(section) { return allSessions.some(s => sectionRowsAll(s, section).length); }
         function selectedSessions() { return allSessions; }
-        function availableMetrics(group, section) { const set = new Set(); selectedSessions().forEach(s => sectionRows(s, group, section).forEach(r => set.add(r.metric))); return [...set]; }
-        function getSelectedRow(session) { const g = groupSelect.value, sec = sectionSelect.value, m = metricSelect.value; return sectionRows(session, g, sec).find(r => r.metric === m); }
+        function availableMetrics(section) {
+            if (isNpqSection(section) && npqViewMode() === 'questions') {
+                const domains = new Set();
+                selectedSessions().forEach(s => sectionRowsAll(s, section).forEach(r => {
+                    if ((r.row_type || '') !== 'item') return;
+                    const d = npqDomainFromRow(r);
+                    if (d) domains.add(d);
+                }));
+                return NPQ_DOMAIN_ORDER.filter(d => domains.has(d));
+            }
+            const set = new Set();
+            selectedSessions().forEach(s => sectionRows(s, section).forEach(r => set.add(r.metric)));
+            return [...set];
+        }
+        function getSelectedRow(session) {
+            const sec = sectionSelect.value, m = metricSelect.value;
+            if (isNpqSection(sec) && npqViewMode() === 'questions') return null;
+            return sectionRows(session, sec).find(r => r.metric === m);
+        }
+        function isNpqQuestionsChart() {
+            return isScalesGroup() && isNpqSection() && npqViewMode() === 'questions' && analysisMode !== 'radar';
+        }
         function radarDirectionForMetric(metricName) { return RADAR_METRIC_DIRECTION[metricName] || 'high'; }
-        function rowStandardScore(session, group, section, metricName) { const row = sectionRows(session, group, section).find(r => r.metric === metricName); return row !== undefined ? toNum(row.standard_score) : undefined; }
+        function rowStandardScore(session, section, metricName) {
+            if (isNpqSection(section) && npqViewMode() === 'questions') {
+                const domain = metricSelect.value;
+                const row = npqQuestionsForDomain(session, domain).find(r => npqQuestionLabel(r) === metricName);
+                return row !== undefined ? toNum(row.standard_score) : undefined;
+            }
+            const row = sectionRows(session, section).find(r => r.metric === metricName);
+            return row !== undefined ? toNum(row.standard_score) : undefined;
+        }
         function syncAnalysisModeUI() {
             const radar = analysisMode === 'radar';
             radarControls.classList.toggle('hidden', !radar);
@@ -770,6 +903,13 @@
             chartTypeWrap.classList.toggle('hidden', radar);
             sessionChartHint.classList.toggle('hidden', radar);
             radarDisclaimer.classList.toggle('hidden', !radar);
+            if (!radar) {
+                if (isNpqQuestionsChart()) {
+                    sessionChartHint.textContent = 'NPQ Questions: each line/bar series is one question in the selected domain; sessions are on the horizontal axis.';
+                } else {
+                    sessionChartHint.textContent = 'Chart shows raw scale scores for the selected metric across sessions (upload order).';
+                }
+            }
         }
         function bindRadarMetricSelectorOnce() {
             if (radarMetricChangeBound) return;
@@ -779,8 +919,15 @@
         function populateRadarMetricSelector() {
             bindRadarMetricSelectorOnce();
             radarMetricSelector.innerHTML = '';
-            const g = groupSelect.value, sec = sectionSelect.value;
-            const ms = availableMetrics(g, sec).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }));
+            const sec = sectionSelect.value;
+            let ms;
+            if (isNpqSection(sec) && npqViewMode() === 'questions') {
+                const domain = metricSelect.value;
+                ms = orderedQuestionLabels(selectedSessions(), domain);
+            } else {
+                ms = availableMetrics(sec);
+                ms = sortScaleMetrics(sec, ms);
+            }
             ms.forEach((metric, i) => {
                 const id = `rm-cb-${i}`;
                 const div = document.createElement('div');
@@ -818,11 +965,12 @@
         resetButton.addEventListener('click', resetAll);
         processFilesButton.addEventListener('click', () => { allSessions = uploadedSessions.filter(s => s.selected !== false); if (!allSessions.length) return; afterProcess(); });
 
-        groupSelect.addEventListener('change', () => { populateSections(); resetStatsAndInterpretation(); renderAll(); });
-        sectionSelect.addEventListener('change', () => { populateMetrics(); resetStatsAndInterpretation(); renderAll(); });
+        sectionSelect.addEventListener('change', () => { syncNpqViewUI(); populateMetrics(); resetStatsAndInterpretation(); renderAll(); });
+        npqViewSelect.addEventListener('change', () => { populateMetrics(); resetStatsAndInterpretation(); renderAll(); });
         metricSelect.addEventListener('change', () => { resetStatsAndInterpretation(); renderAll(); });
         analysisModeSelect.addEventListener('change', () => {
             analysisMode = analysisModeSelect.value;
+            syncNpqViewUI();
             if (analysisMode === 'radar') populateRadarMetricSelector();
             resetStatsAndInterpretation();
             renderAll();
@@ -848,20 +996,47 @@
         }
         async function parseFiles(files) { const fd = new FormData(); files.forEach(f => fd.append('files', f, f.name)); const res = await fetch('/parse-cnsvs', { method: 'POST', body: fd }); if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || err.error?.message || `HTTP ${res.status}`); } const data = await res.json(); return data.map((s, i) => normalizeSession(s, files[i]?.name)); }
         function renderUploadList() { fileList.innerHTML = uploadedSessions.map((s, i) => `<div class="file-card ${s.selected !== false ? 'selected' : ''}"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" data-i="${i}" ${s.selected !== false ? 'checked' : ''} style="width:auto;"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(labelOf(s))}</div><div class="small">${countScores(s)} score rows</div></div><button class="reorder-button" data-act="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button class="reorder-button" data-act="down" data-i="${i}" ${i === uploadedSessions.length - 1 ? 'disabled' : ''}>↓</button></div></div>`).join(''); fileList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', e => { uploadedSessions[+e.target.dataset.i].selected = e.target.checked; processFilesButton.disabled = !uploadedSessions.some(s => s.selected !== false); renderUploadList(); })); fileList.querySelectorAll('.reorder-button').forEach(btn => btn.addEventListener('click', e => { const i = +e.currentTarget.dataset.i, act = e.currentTarget.dataset.act, j = act === 'up' ? i - 1 : i + 1; if (j < 0 || j >= uploadedSessions.length) return;[uploadedSessions[i], uploadedSessions[j]] = [uploadedSessions[j], uploadedSessions[i]]; renderUploadList(); })); }
-        function countScores(s) { let c = 0; GROUP_ORDER.forEach(g => Object.values(s.groups[g] || {}).forEach(rows => c += (rows || []).length)); return c; }
+        function countScores(s) {
+            let c = 0;
+            Object.values(s.groups[ACTIVE_GROUP] || {}).forEach(sec => {
+                if (Array.isArray(sec)) c += sec.length;
+            });
+            return c;
+        }
         function afterProcess() { analysisMode = 'trend'; analysisModeSelect.value = 'trend'; controlsSection.classList.remove('hidden'); resultsSection.classList.remove('hidden'); placeholder.classList.add('hidden'); loading.classList.add('hidden'); allSessions.forEach(s => s.selected = true); populateControls(); renderAll(); }
         function resetAll() { uploadedSessions = []; allSessions = []; if (resultsChart) { resultsChart.destroy(); resultsChart = null; } analysisMode = 'trend'; analysisModeSelect.value = 'trend'; fileInput.value = ''; fileList.innerHTML = ''; fileActionButtons.classList.add('hidden'); fileActionButtons.style.display = 'none'; fileListHelper.classList.add('hidden'); controlsSection.classList.add('hidden'); resultsSection.classList.add('hidden'); loading.classList.add('hidden'); placeholder.classList.remove('hidden'); }
-        function populateControls() { groupSelect.innerHTML = GROUP_ORDER.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(''); populateSections(); }
-        function populateSections() { const g = groupSelect.value; let secs = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES); const avail = secs.filter(sec => hasRows(g, sec)); sectionSelect.innerHTML = (avail.length ? avail : secs).map(sec => `<option value="${esc(sec)}">${esc(sec)}</option>`).join(''); populateMetrics(); }
-        function populateMetrics() { const g = groupSelect.value, sec = sectionSelect.value; const ms = availableMetrics(g, sec); metricSelect.innerHTML = ms.length ? ms.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('') : '<option value="">No field values found</option>'; if (analysisMode === 'radar') populateRadarMetricSelector(); }
+        function populateControls() { populateSections(); }
+        function sortScaleMetrics(sec, metrics) {
+            return [...metrics].sort((a, b) => metricSortKey(a, sec) - metricSortKey(b, sec));
+        }
+        function populateMetrics() {
+            syncNpqViewUI();
+            const sec = sectionSelect.value;
+            const prevMetric = metricSelect.value;
+            let ms = availableMetrics(sec);
+            ms = sortScaleMetrics(sec, ms);
+            metricSelect.innerHTML = ms.length ? ms.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('') : '<option value="">No field values found</option>';
+            if (prevMetric && ms.includes(prevMetric)) metricSelect.value = prevMetric;
+            if (analysisMode === 'radar') populateRadarMetricSelector();
+        }
+        function populateSections(preserveSection = true) {
+            const previous = preserveSection ? sectionSelect.value : '';
+            const secs = sectionsForGroup();
+            const list = secs.filter(sec => hasRows(sec));
+            const optionsList = list.length ? list : secs;
+            sectionSelect.innerHTML = optionsList.map(sec => `<option value="${esc(sec)}">${esc(sec)}</option>`).join('');
+            if (previous && optionsList.includes(previous)) sectionSelect.value = previous;
+            syncNpqViewUI();
+            populateMetrics();
+        }
         function syncChartButtons() { chartBarBtn.classList.toggle('chart-type-active', chartStyle === 'bar'); chartLineBtn.classList.toggle('chart-type-active', chartStyle === 'line'); }
         function renderRadarChartAndTable() {
-            const sessions = selectedSessions(), g = groupSelect.value, sec = sectionSelect.value;
+            const sessions = selectedSessions(), sec = sectionSelect.value;
             const radarMetrics = selectedRadarMetrics();
             if (!sessions.length) { summaryTableContainer.innerHTML = '<p class="small">Select at least one file.</p>'; return; }
             if (!radarMetrics.length) { summaryTableContainer.innerHTML = '<p class="small">Select at least one profile metric (axis).</p>'; return; }
             let anySs = false;
-            sessions.forEach(s => { radarMetrics.forEach(m => { if (rowStandardScore(s, g, sec, m) !== undefined) anySs = true; }); });
+            sessions.forEach(s => { radarMetrics.forEach(m => { if (rowStandardScore(s, sec, m) !== undefined) anySs = true; }); });
             if (!anySs) { summaryTableContainer.innerHTML = '<p class="small">No standard scores found for the current test and section.</p>'; return; }
             const short = s => { const L = labelOf(s); return L.length > 22 ? '…' + L.slice(-19) : L; };
             const labels = sessions.map(short);
@@ -869,7 +1044,7 @@
             const maxValues = {};
             radarMetrics.forEach(m => {
                 let mx = 0;
-                sessions.forEach(s => { const v = rowStandardScore(s, g, sec, m); if (v !== undefined && Math.abs(v) > mx) mx = Math.abs(v); });
+                sessions.forEach(s => { const v = rowStandardScore(s, sec, m); if (v !== undefined && Math.abs(v) > mx) mx = Math.abs(v); });
                 maxValues[m] = mx === 0 ? 1 : mx;
             });
             const chartData = {
@@ -877,7 +1052,7 @@
                 datasets: sessions.map((s, i) => {
                     const nd = [], od = [];
                     radarMetrics.forEach(m => {
-                        const v = rowStandardScore(s, g, sec, m);
+                        const v = rowStandardScore(s, sec, m);
                         od.push(v);
                         if (v === undefined) { nd.push(NaN); return; }
                         let n = v / maxValues[m];
@@ -901,7 +1076,7 @@
                 })
             };
             const ctx = chartCanvas.getContext('2d');
-            const profileTitle = `${g} → ${sec}`;
+            const profileTitle = sec;
             resultsChart = new Chart(ctx, {
                 type: 'radar',
                 data: chartData,
@@ -947,7 +1122,7 @@
             else if (nf > 2) headCells += '<th>Mean SS</th><th>SD</th>';
             let tbody = '';
             radarMetrics.forEach(m => {
-                const vals = sessions.map(s => rowStandardScore(s, g, sec, m));
+                const vals = sessions.map(s => rowStandardScore(s, sec, m));
                 let row = `<tr><td class="td-name">${esc(m)}</td>`;
                 vals.forEach(v => { row += `<td>${v !== undefined ? nfmt(v) : '—'}</td>`; });
                 if (nf === 2) {
@@ -970,52 +1145,227 @@
             });
             summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr>${headCells}</tr></thead><tbody>${tbody}</tbody></table>`;
         }
+        function renderNpqQuestionsChart(sessions, sec, domain) {
+            const ctx = chartCanvas.getContext('2d');
+            const type = chartStyle === 'line' ? 'line' : 'bar';
+            const common = { borderWidth: 2, tension: .25, spanGaps: true, pointRadius: type === 'line' ? 4 : 3 };
+            const questionLabels = orderedQuestionLabels(sessions, domain);
+            if (!questionLabels.length) {
+                summaryTableContainer.innerHTML = '<p class="small">No NPQ questions found for this domain.</p>';
+                return;
+            }
+            const datasets = questionLabels.map((qLabel, qi) => ({
+                label: qLabel,
+                data: sessions.map(s => {
+                    const row = npqQuestionsForDomain(s, domain).find(r => npqQuestionLabel(r) === qLabel);
+                    return row ? rowScore(row) : null;
+                }),
+                backgroundColor: CHART_COLORS[qi % CHART_COLORS.length].bg,
+                borderColor: CHART_COLORS[qi % CHART_COLORS.length].border,
+                yAxisID: 'y',
+                ...common,
+            }));
+            resultsChart = new Chart(ctx, {
+                type,
+                data: { labels: sessions.map(labelOf), datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: `${sec} → ${domain} (all questions)`, color: '#e6edf3', font: { size: 14, weight: '600' } },
+                        legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 10 } } },
+                        tooltip: {
+                            backgroundColor: '#1c2330',
+                            borderColor: '#30363d',
+                            borderWidth: 1,
+                            titleColor: '#e6edf3',
+                            bodyColor: '#8b949e',
+                            callbacks: {
+                                afterBody(items) {
+                                    if (!items.length) return '';
+                                    const si = items[0].dataIndex;
+                                    const s = sessions[si];
+                                    const q = items[0].dataset.label;
+                                    const row = npqQuestionsForDomain(s, domain).find(r => npqQuestionLabel(r) === q);
+                                    return row?.response ? `Response: ${row.response}` : '';
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } },
+                        y: { beginAtZero: true, max: 3, title: { display: true, text: 'Score (0–3)', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } },
+                    },
+                },
+            });
+            let headCells = `<th>Question</th>${sessions.map(s => `<th class="td-name">${esc(labelOf(s))}</th>`).join('')}`;
+            const tbody = questionLabels.map(qLabel => {
+                let row = `<tr><td class="td-name">${esc(qLabel)}</td>`;
+                sessions.forEach(s => {
+                    const r = npqQuestionsForDomain(s, domain).find(x => npqQuestionLabel(x) === qLabel);
+                    row += `<td>${r ? nfmt(rowScore(r)) : '—'}</td>`;
+                });
+                return row + '</tr>';
+            }).join('');
+            summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr>${headCells}</tr></thead><tbody>${tbody}</tbody></table>`;
+        }
         function renderAll() { if (!allSessions.length) return; renderChartAndTable(); if (statsContent.dataset.computed) renderStats(); }
         function renderChartAndTable() {
             if (resultsChart) { resultsChart.destroy(); resultsChart = null; }
             syncAnalysisModeUI();
             if (analysisMode === 'radar') { renderRadarChartAndTable(); return; }
-            const sessions = selectedSessions(), g = groupSelect.value, sec = sectionSelect.value, m = metricSelect.value;
+            const sessions = selectedSessions(), sec = sectionSelect.value, m = metricSelect.value;
             if (!sessions.length || !m) { summaryTableContainer.innerHTML = '<p class="small">Select at least one file and metric.</p>'; return; }
+            if (isNpqQuestionsChart()) {
+                renderNpqQuestionsChart(sessions, sec, m);
+                return;
+            }
             const rows = sessions.map(s => ({ session: s, row: getSelectedRow(s) }));
             const ctx = chartCanvas.getContext('2d');
             const type = chartStyle === 'line' ? 'line' : 'bar';
             const common = { borderWidth: 2, tension: .25, spanGaps: true, pointRadius: type === 'line' ? 4 : 3 };
-            resultsChart = new Chart(ctx, { type, data: { labels: rows.map(x => labelOf(x.session)), datasets: [{ label: 'Percentile', data: rows.map(x => x.row?.percentile ?? null), backgroundColor: CHART_COLORS[0].bg, borderColor: CHART_COLORS[0].border, yAxisID: 'y', ...common }, { label: 'Standard Score', data: rows.map(x => x.row?.standard_score ?? null), backgroundColor: CHART_COLORS[1].bg, borderColor: CHART_COLORS[1].border, yAxisID: 'y1', ...common }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `${g} → ${sec} → ${m}`, color: '#e6edf3', font: { size: 14, weight: '600' } }, legend: { labels: { color: '#8b949e' } }, tooltip: { backgroundColor: '#1c2330', borderColor: '#30363d', borderWidth: 1, titleColor: '#e6edf3', bodyColor: '#8b949e', callbacks: { afterLabel: (ctx) => { const r = rows[ctx.dataIndex].row; return r?.flagged ? 'FLAG: Percentile < 30' : ''; } } } }, scales: { x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y: { min: 0, max: 100, title: { display: true, text: 'Percentile', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } }, y1: { position: 'right', title: { display: true, text: 'Standard Score', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { drawOnChartArea: false } } } } });
-            summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr><th>Order</th><th>File</th><th>Test Name</th><th>Field / Section</th><th>Metric</th><th>Standard Score</th><th>Percentile</th><th>Flag</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td class="td-name">${esc(labelOf(x.session))}</td><td>${esc(g)}</td><td>${esc(sec)}</td><td class="td-name">${esc(m)}</td><td class="${scoreClass(x.row)}">${nfmt(x.row?.standard_score)}</td><td class="${percentileClass(x.row?.percentile)}">${nfmt(x.row?.percentile)}</td><td>${x.row?.flagged ? '<span class="flag-pill">FLAG</span>' : '—'}</td></tr>`).join('')}</tbody></table>`;
+            resultsChart = new Chart(ctx, {
+                    type,
+                    data: {
+                        labels: rows.map(x => labelOf(x.session)),
+                        datasets: [{
+                            label: 'Score',
+                            data: rows.map(x => rowScore(x.row) ?? null),
+                            backgroundColor: CHART_COLORS[0].bg,
+                            borderColor: CHART_COLORS[0].border,
+                            yAxisID: 'y',
+                            ...common,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: `${sec} → ${m}`, color: '#e6edf3', font: { size: 14, weight: '600' } },
+                            legend: { labels: { color: '#8b949e' } },
+                            tooltip: {
+                                backgroundColor: '#1c2330',
+                                borderColor: '#30363d',
+                                borderWidth: 1,
+                                titleColor: '#e6edf3',
+                                bodyColor: '#8b949e',
+                                callbacks: {
+                                    afterLabel: (ctx) => {
+                                        const r = rows[ctx.dataIndex].row;
+                                        const parts = [];
+                                        if (r?.severity) parts.push(`Severity: ${r.severity}`);
+                                        if (r?.response) parts.push(`Response: ${r.response}`);
+                                        return parts.join('\n');
+                                    },
+                                },
+                            },
+                        },
+                        scales: {
+                            x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } },
+                            y: { beginAtZero: true, title: { display: true, text: 'Score', color: '#6e7681' }, ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } },
+                        },
+                    },
+                });
+                summaryTableContainer.innerHTML = `<table class="data-table"><thead><tr><th>Order</th><th>File</th><th>Scale</th><th>Metric</th><th>Score</th><th>Severity</th><th>Response</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td class="td-name">${esc(labelOf(x.session))}</td><td>${esc(sec)}</td><td class="td-name">${esc(m)}</td><td>${nfmt(rowScore(x.row))}</td><td>${esc(x.row?.severity || '—')}</td><td>${esc(x.row?.response || '—')}</td></tr>`).join('')}</tbody></table>`;
         }
         function buildGroupedDataTextForReport() {
-            const rows = ['File | Test Name | Field / Section | Field Value / Metric | Standard Score | Percentile | Flag'];
+            const out = ['File | Scale | Metric | Score | Severity | Response'];
             selectedSessions().forEach(s => {
-                GROUP_ORDER.forEach(g => {
-                    const sections = g === 'Cognitive' ? [DOMAIN_SECTION] : (g === 'Specific Test Scores' ? SPECIFIC_TEST_NAMES : FOUR_PART_NAMES);
-                    sections.forEach(sec => sectionRows(s, g, sec).forEach(r => {
-                        rows.push([labelOf(s), g, sec, r.metric, nfmt(r.standard_score), nfmt(r.percentile), r.flagged ? 'FLAG' : '—'].join(' | '));
-                    }));
+                sectionsForGroup().forEach(sec => {
+                    sectionRowsAll(s, sec)
+                        .slice()
+                        .sort((a, b) => (a.sort_index ?? 9999) - (b.sort_index ?? 9999))
+                        .forEach(r => {
+                            out.push([
+                                labelOf(s), sec, r.metric,
+                                nfmt(rowScore(r)),
+                                r.severity || '—', r.response || '—',
+                            ].join(' | '));
+                        });
                 });
             });
-            return rows.join('\n');
+            return out.join('\n');
         }
-        function currentSeries() { return selectedSessions().map((s, i) => ({ i, s, row: getSelectedRow(s) })).filter(x => x.row); }
+        function currentSeries() {
+            if (isNpqQuestionsChart()) {
+                const domain = metricSelect.value;
+                const out = [];
+                selectedSessions().forEach((s, i) => {
+                    npqQuestionsForDomain(s, domain).forEach(row => out.push({ i, s, row }));
+                });
+                return out;
+            }
+            return selectedSessions().map((s, i) => ({ i, s, row: getSelectedRow(s) })).filter(x => x.row);
+        }
         function renderStats() {
             if (analysisMode === 'radar') { statsContent.innerHTML = '<p class="small">Statistical diagnostics use the single-metric trend view. Switch visualization mode to <strong>Trend by session (line / bar)</strong>, choose one metric, then run diagnostics.</p>'; return; }
-            const rows = currentSeries(), p = rows.map(x => x.row.percentile).filter(v => v !== undefined), ss = rows.map(x => x.row.standard_score).filter(v => v !== undefined); if (!rows.length) { statsContent.innerHTML = '<p class="small">No numeric data for selected field.</p>'; return; } const dsP = descStats(p), dsS = descStats(ss); const idx = rows.map(x => x.i + 1); let html = ''; if (activeStatTab === 'descriptive') { html += statSection('Percentile Descriptive', statRows(dsP)); html += statSection('Standard Score Descriptive', statRows(dsS)); }
-            else if (activeStatTab === 'inferential') { const first = rows[0].row.percentile, last = rows[rows.length - 1].row.percentile, delta = (last ?? 0) - (first ?? 0); const sdv = sdSample(p); const z = sdv ? delta / sdv : undefined; html += statSection('Change Inference', [['First → Last', `${nfmt(first)} → ${nfmt(last)}`, 'Absolute percentile change across selected ordered sessions.'], ['Delta', nfmt(delta), 'Positive means percentile improved; negative means percentile declined.'], ['Effect Size (Δ/SD)', nfmt(z), 'Rule of thumb only; small samples are descriptive, not confirmatory.'], ['Flag Burden', `${rows.filter(x => x.row.flagged).length}/${rows.length}`, 'Number of sessions below percentile threshold.']]); }
-            else if (activeStatTab === 'correlation') { const rp = pearson(idx, p), rsp = spearman(idx, p), rss = pearson(p, ss); html += statSection('Correlation', [['Session Order vs Percentile', nfmt(rp), 'Pearson correlation across selected file order.'], ['Spearman Trend', nfmt(rsp), 'Rank-based monotonic trend across sessions.'], ['Percentile vs Standard Score', nfmt(rss), 'Association between percentile and standard score.']]); }
-            else if (activeStatTab === 'regression') { const regP = linReg(idx, p), regS = linReg(idx, ss); html += statSection('Linear Regression', [['Percentile Slope', nfmt(regP?.slope), 'Average percentile change per selected session step.'], ['Percentile R²', nfmt(regP?.r2), 'Proportion of percentile variance explained by session order.'], ['Standard Score Slope', nfmt(regS?.slope), 'Average standard score change per selected session step.'], ['Standard Score R²', nfmt(regS?.r2), 'Proportion of standard score variance explained by session order.']]); }
-            else if (activeStatTab === 'multivariate') { const flagged = rows.filter(x => x.row.flagged).length; html += statSection('Multivariate Snapshot', [['Variables Used', 'Percentile + Standard Score', 'Current CNSVS field combines both values.'], ['Mean Percentile / SS', `${nfmt(dsP?.mean)} / ${nfmt(dsS?.mean)}`, 'Combined central tendency.'], ['CV Percentile / SS', `${nfmt(dsP?.cv)}% / ${nfmt(dsS?.cv)}%`, 'Higher CV suggests more variability.'], ['Flag Rate', `${nfmt(flagged / rows.length * 100)}%`, 'Share of selected sessions below percentile 30.']]); }
-            else { const deltas = rows.slice(1).map((x, i) => ({ from: labelOf(rows[i].s), to: labelOf(x.s), d: (x.row.percentile ?? 0) - (rows[i].row.percentile ?? 0) })); html += statSection('Longitudinal Pattern', [['Sessions Included', String(rows.length), 'All processed files are included, in upload list order.'], ['Net Change', nfmt((rows.at(-1).row.percentile ?? 0) - (rows[0].row.percentile ?? 0)), 'Last percentile minus first percentile.'], ['Largest Step Change', deltas.length ? `${deltas.sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0].from} → ${deltas[0].to}: ${nfmt(deltas[0].d)}` : '—', 'Largest session-to-session percentile movement.'], ['Direction', trendText(p), 'Overall directional pattern.']]); }
+            const rows = currentSeries();
+            const p = rows.map(x => rowScore(x.row)).filter(v => v !== undefined);
+            if (!rows.length) { statsContent.innerHTML = '<p class="small">No numeric data for selected field.</p>'; return; }
+            const dsP = descStats(p);
+            const idx = rows.map(x => x.i + 1);
+            let html = '';
+            if (activeStatTab === 'descriptive') {
+                html += statSection('Score Descriptive', statRows(dsP));
+            }
+            else if (activeStatTab === 'inferential') {
+                const first = rowScore(rows[0].row);
+                const last = rowScore(rows[rows.length - 1].row);
+                const delta = (last ?? 0) - (first ?? 0);
+                const sdv = sdSample(p);
+                const z = sdv ? delta / sdv : undefined;
+                html += statSection('Change Inference', [
+                    ['First → Last', `${nfmt(first)} → ${nfmt(last)}`, 'Absolute score change across sessions.'],
+                    ['Delta', nfmt(delta), 'Change in raw scale score.'],
+                    ['Effect Size (Δ/SD)', nfmt(z), 'Rule of thumb only; small samples are descriptive, not confirmatory.'],
+                ]);
+            }
+            else if (activeStatTab === 'correlation') {
+                const rp = pearson(idx, p), rsp = spearman(idx, p);
+                html += statSection('Correlation', [
+                    ['Session Order vs Score', nfmt(rp), 'Pearson correlation across selected file order.'],
+                    ['Spearman Trend', nfmt(rsp), 'Rank-based monotonic trend across sessions.'],
+                ]);
+            }
+            else if (activeStatTab === 'regression') {
+                const regP = linReg(idx, p);
+                html += statSection('Linear Regression', [
+                    ['Score Slope', nfmt(regP?.slope), 'Average score change per selected session step.'],
+                    ['Score R²', nfmt(regP?.r2), 'Proportion of score variance explained by session order.'],
+                ]);
+            }
+            else if (activeStatTab === 'multivariate') {
+                html += statSection('Multivariate Snapshot', [
+                    ['Variable', 'Scale score', 'Current view uses raw scale scores.'],
+                    ['Mean Score', nfmt(dsP?.mean), 'Central tendency across sessions.'],
+                    ['CV Score', `${nfmt(dsP?.cv)}%`, 'Relative variability across sessions.'],
+                ]);
+            }
+            else {
+                const deltas = rows.slice(1).map((x, i) => {
+                    const v1 = rowScore(rows[i].row);
+                    const v2 = rowScore(x.row);
+                    return { from: labelOf(rows[i].s), to: labelOf(x.s), d: (v2 ?? 0) - (v1 ?? 0) };
+                });
+                const net = (rowScore(rows.at(-1).row) ?? 0) - (rowScore(rows[0].row) ?? 0);
+                html += statSection('Longitudinal Pattern', [
+                    ['Sessions Included', String(rows.length), 'All processed files are included, in upload list order.'],
+                    ['Net Change', nfmt(net), 'Last score minus first score.'],
+                    ['Largest Step Change', deltas.length ? `${deltas.sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0].from} → ${deltas[0].to}: ${nfmt(deltas[0].d)}` : '—', 'Largest session-to-session movement.'],
+                    ['Direction', trendText(p), 'Overall directional pattern.'],
+                ]);
+            }
             statsContent.innerHTML = html;
         }
-        function trendText(vals) { if (vals.length < 2) return 'Insufficient data'; const d = vals.at(-1) - vals[0]; if (Math.abs(d) < 3) return 'Stable / minimal net change'; return d > 0 ? 'Improving percentile trend' : 'Declining percentile trend'; }
+        function trendText(vals) { if (vals.length < 2) return 'Insufficient data'; const d = vals.at(-1) - vals[0]; if (Math.abs(d) < 1) return 'Stable / minimal net change'; return d > 0 ? 'Increasing score trend' : 'Decreasing score trend'; }
         function statRows(ds) { if (!ds) return [['N', '0', 'No data']]; return [['N', ds.n, 'Number of selected sessions with values.'], ['Mean', nfmt(ds.mean), 'Average value.'], ['Median', nfmt(ds.median), 'Middle value.'], ['SD', nfmt(ds.sd), 'Session-to-session variability.'], ['Min / Max', `${nfmt(ds.min)} / ${nfmt(ds.max)}`, 'Observed range.'], ['IQR', nfmt(ds.iqr), 'Middle 50% spread.'], ['CV', `${nfmt(ds.cv)}%`, 'Relative variability.']]; }
         function statSection(title, rows) { return `<div class="stat-section"><div class="stat-section-header">${esc(title)}</div><div class="stat-section-body">${rows.map(r => `<div class="stat-row"><div class="stat-label">${esc(r[0])}</div><div class="stat-value">${esc(r[1])}</div><div class="stat-commentary">${esc(r[2])}</div></div>`).join('')}</div></div>`; }
         function exportCsv() { const table = summaryTableContainer.querySelector('table'); if (!table) return; const csv = [...table.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`).join(',')).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cnsvs-selected-values.csv'; a.click(); URL.revokeObjectURL(a.href); }
         function buildReportDump() { const grouped = buildGroupedDataTextForReport(); const selected = summaryTableContainer.querySelector('table') ? [...summaryTableContainer.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')).join('\n') : ''; return `[Selected Field]\n${selected}\n\n[Complete Grouped CNSVS Data]\n${grouped}`; }
         async function callAI(systemPrompt, userMessage) { let response; try { response = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_tokens: AI_REQUEST_DEFAULTS.maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }) }); } catch (ne) { throw new Error(`Network error: ${ne.message}`); } if (!response.ok) { const p = await response.json().catch(() => ({})); throw new Error(p?.error?.message || `HTTP ${response.status}`); } const result = await response.json(); if (result.content?.[0]?.text) return result.content[0].text; throw new Error('Unexpected response format.'); }
         function setButtonsLoading(which, on) { const map = { full: [fullReportBtn, 'full-report-btn-text', 'Full Report'], interpret: [interpretationButton, 'interpret-button-text', 'Interpret View'], exec: [execSummaryBtn, 'exec-summary-btn-text', 'Executive Summary'] }; Object.values(map).forEach(([btn]) => btn.disabled = on); editInterpretationBtn.disabled = on || !lastInterpretationRaw.trim(); if (map[which]) $(map[which][1]).textContent = on ? 'Generating…' : map[which][2]; if (!on) { Object.values(map).forEach(([btn, id, txt]) => $(id).textContent = txt); } }
-        async function generateFullReport() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('full', true); interpretationOutput.textContent = 'Generating comprehensive report…'; const sys = 'You are a clinical expert in neurocognitive CNS Vital Signs interpretation. Provide a comprehensive structured interpretation. Structure: Executive Summary → Cognitive Domain Scores → Specific Test Scores → Four Part Continuous Performance Test → Statistical Highlights → Clinical Considerations. Be evidence-based and non-diagnostic. Flag percentile <30.'; try { const text = await callAI(sys, `Create a full CNSVS report from this grouped data:\n\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('full', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
-        async function generateInterpretView() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('interpret', true); interpretationOutput.textContent = 'Analyzing selected view…'; const sys = 'You are a clinical expert in CNS Vital Signs interpretation. Interpret only the selected CNSVS field across selected sessions. Comment on trend, flagged values, and clinical meaning. Be concise and non-diagnostic.'; try { const text = await callAI(sys, `Current selected CNSVS view:\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('interpret', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
+        async function generateFullReport() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('full', true); interpretationOutput.textContent = 'Generating comprehensive report…'; const sys = 'You are a clinical expert in CNS Vital Signs scales interpretation. Provide a comprehensive structured interpretation. Structure: Executive Summary → GAD-7 → NPQ SF-45 → PHQ-9 → PSQI SF-10 → PCL-5 SF-20 → Statistical Highlights → Clinical Considerations. Be evidence-based and non-diagnostic.'; try { const text = await callAI(sys, `Create a full CNSVS scales report from this grouped data:\n\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('full', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
+        async function generateInterpretView() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('interpret', true); interpretationOutput.textContent = 'Analyzing selected view…'; const sys = 'You are a clinical expert in CNS Vital Signs scales interpretation. Interpret only the selected scale/metric across selected sessions. Comment on trend, severity, responses, and clinical meaning. Be concise and non-diagnostic.'; try { const text = await callAI(sys, `Current selected CNSVS scales view:\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('interpret', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
         async function generateExecutiveSummary() { flushInterpretationEditBeforeGenerate(); setButtonsLoading('exec', true); interpretationOutput.textContent = 'Generating executive summary…'; const sys = 'You are a clinical expert in CNS Vital Signs interpretation. Create a crisp executive summary with short titled sections: Overview, Main Findings, Flagged Areas, Longitudinal Pattern, What to Consider Next. Be non-diagnostic.'; try { const text = await callAI(sys, `Create executive summary from CNSVS grouped data:\n\n${buildReportDump()}`); setInterpretationMarkdown(text); } catch (e) { interpretationOutput.textContent = `Error: ${e.message}`; lastInterpretationRaw = ''; editInterpretationBtn.disabled = true; } finally { setButtonsLoading('exec', false); interpretationOutput.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
     </script>
 </body>
